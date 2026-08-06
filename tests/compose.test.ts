@@ -145,6 +145,18 @@ describe('the local reasoning engine', () => {
     }
   });
 
+  it('separates sections with a blank line so headings do not merge into prose', () => {
+    for (const prompt of ['What should I do today?', 'How has my recovery been?']) {
+      const result = answer(prompt, [companySlice, personalSlice], ['company', 'personal']);
+      // A section heading must start its own paragraph, never continue the line
+      // above it — `.filter(Boolean)` used to drop the intentional blank.
+      expect(result.body).toMatch(/\n\n\S/);
+      for (const line of result.body.split('\n')) {
+        expect(line.startsWith(' ')).toBe(false);
+      }
+    }
+  });
+
   it('handles a completely empty space without throwing', () => {
     const bare: SpaceSlice = {
       scopeKey: 'company:empty',

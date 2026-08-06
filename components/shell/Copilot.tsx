@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import type { AssistantMessage } from '@/lib/domain';
 import { askAssistant } from '@/lib/actions/assistant';
+import { specialistName } from '@/lib/ai/specialists';
 import { Icon } from '@/components/ui/Icon';
 
 export interface CopilotProps {
@@ -195,7 +196,7 @@ function Message({ message }: { message: AssistantMessage }) {
               {message.plan.steps.map((step) => (
                 <div key={step.id} className="plan-step">
                   <div className="grow">
-                    <div className="plan-step-name">{step.specialistId}</div>
+                    <div className="plan-step-name">{specialistName(step.specialistId)}</div>
                     <div>{step.objective}</div>
                     {step.output ? <div className="faint">{step.output}</div> : null}
                   </div>

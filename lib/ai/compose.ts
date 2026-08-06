@@ -110,6 +110,18 @@ function section(heading: string, body: string): string {
   return `${heading}\n${body}`;
 }
 
+/**
+ * Join answer blocks with a blank line between them.
+ *
+ * Not `.filter(Boolean).join('\n')` — an intentional blank separator is falsy,
+ * so that idiom silently collapsed every section heading onto the line above it.
+ */
+function blocks(parts: ReadonlyArray<string | null | undefined>): string {
+  return parts
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .join('\n\n');
+}
+
 /* ---------------------------------------------------------- composers ----- */
 
 type Composer = (ctx: AssistantContext, prompt: string) => Composition;
@@ -169,15 +181,11 @@ const composeExecutive: Composer = (ctx) => {
     );
   }
 
-  const body = [
+  const body = blocks([
     energyLine,
-    '',
     section('What I would do today', lines.length ? bullet(lines) : '• Nothing is open. That is allowed.'),
-    tail.length ? '' : '',
-    tail.length ? section('Worth knowing', bullet(tail)) : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+    tail.length ? section('Worth knowing', bullet(tail)) : null,
+  ]);
 
   return {
     summary: `Ranked ${tasks.length} open items against today's energy and picked ${picked.length}.`,
@@ -228,13 +236,11 @@ const composeFinance: Composer = (ctx) => {
         : 'Positive and holding. The buffer is real.'
       : 'Negative over the period. This is the number to fix before anything else gets funded.';
 
-  const body = [
+  const body = blocks([
     section(`Position (actuals only, forecasts excluded)`, bullet(lines)),
-    '',
     section('Where it goes', costLines.length ? bullet(costLines) : '• No recorded spend.'),
-    '',
     section('Read', verdict),
-  ].join('\n');
+  ]);
 
   return {
     summary: `Reconciled ${pluralise(financeOf(ctx).length, 'ledger entry', 'ledger entries')} across ${pos.months} months.`,
@@ -273,7 +279,7 @@ const composeHealth: Composer = (ctx) => {
   const nonNegotiable = ctx.personal.dna.nonNegotiables.find((n) => /sleep/i.test(n));
   const breach = nonNegotiable && avgSleep < 7;
 
-  const body = [
+  const body = blocks([
     section(
       'Last seven days',
       bullet([
@@ -283,7 +289,6 @@ const composeHealth: Composer = (ctx) => {
         `Training sessions: ${trained}`,
       ]),
     ),
-    '',
     section(
       'What that permits',
       budget === null
@@ -291,11 +296,9 @@ const composeHealth: Composer = (ctx) => {
         : `About ${formatDurationMinutes(budget)} of deep work per day. Planning above that borrows from next week.`,
     ),
     breach
-      ? `\nThis breaches one of your own non-negotiables: "${nonNegotiable}". It is the first thing to fix, because every other number here is downstream of it.`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+      ? `This breaches one of your own non-negotiables: "${nonNegotiable}". It is the first thing to fix, because every other number here is downstream of it.`
+      : null,
+  ]);
 
   return {
     summary: `Read ${week.length} days of recovery data.`,
@@ -331,7 +334,7 @@ const composePersonal: Composer = (ctx) => {
 
   const learn = learningOf(ctx).filter((l) => l.item.status === 'active');
 
-  const body = [
+  const body = blocks([
     section(
       'People past their cadence',
       overdue.length
@@ -345,14 +348,12 @@ const composePersonal: Composer = (ctx) => {
           )
         : '• Everyone is within the cadence you set.',
     ),
-    '',
     section(
       'Habits slipping',
       struggling.length
         ? bullet(struggling.slice(0, 3).map((x) => `${x.h.item.name} — ${Math.round(x.adherence * 100)}% of target`))
         : '• Nothing below 70% adherence.',
     ),
-    '',
     section(
       'Next up',
       bullet(
@@ -362,7 +363,7 @@ const composePersonal: Composer = (ctx) => {
         ].filter((x): x is string => x !== null),
       ) || '• Nothing pending.',
     ),
-  ].join('\n');
+  ]);
 
   return {
     summary: `Checked ${rels.length} relationships, ${habits.length} habits and ${admin.length} open life items.`,
@@ -381,7 +382,7 @@ const composeStrategy: Composer = (ctx) => {
   const atRisk = goals.filter((g) => g.item.status === 'at-risk' || g.item.status === 'off-track');
   const risks = risksOf(ctx).sort((a, b) => severityRank(b.item.severity) - severityRank(a.item.severity));
 
-  const body = [
+  const body = blocks([
     section(
       'Goals',
       bullet(
@@ -393,20 +394,18 @@ const composeStrategy: Composer = (ctx) => {
           ),
       ) || '• No goals set.',
     ),
-    '',
     section(
       'What would break the plan',
       bullet(risks.slice(0, 3).map((r) => `${r.item.label} (${r.item.severity}) — ${r.item.mitigation ?? 'no mitigation recorded'}`)) ||
         '• No risks recorded.',
     ),
-    '',
     section(
       'Read',
       atRisk.length
         ? `${pluralise(atRisk.length, 'goal is', 'goals are')} not on track. The honest move is to cut one rather than run all of them at 60%.`
         : 'Everything tracked is on course. The risk register is where the attention belongs.',
     ),
-  ].join('\n');
+  ]);
 
   return {
     summary: `Reviewed ${goals.length} goals and ${risks.length} risks.`,
@@ -435,7 +434,7 @@ const composeGrowth: Composer = (ctx) => {
   const currency = active[0]?.item.value?.currency ?? 'CHF';
   const growthKpis = kpisOf(ctx).filter((k) => ['marketing', 'sales'].includes(k.item.capabilityId));
 
-  const body = [
+  const body = blocks([
     section(
       'Pipeline',
       bullet([
@@ -444,20 +443,18 @@ const composeGrowth: Composer = (ctx) => {
         `${pluralise(contacts.filter((c) => c.item.stage === 'won').length, 'deal')} won, ${contacts.filter((c) => c.item.stage === 'lost').length} lost`,
       ]),
     ),
-    '',
     section(
       'Metrics',
       bullet(growthKpis.slice(0, 4).map((k) => `${k.item.label}: ${k.item.value}${k.item.format === 'percent' ? '%' : ''}`)) ||
         '• No growth metrics recorded.',
     ),
-    '',
     section(
       'Read',
       stale.length
         ? `The leak is follow-up, not lead generation: ${stale.length} of ${active.length} open conversations are already past their date. ${stale[0]?.item.name} is the oldest.`
         : 'Follow-up is current. The constraint is upstream — more qualified conversations, not better chasing.',
     ),
-  ].join('\n');
+  ]);
 
   return {
     summary: `Read ${contacts.length} contacts and ${growthKpis.length} growth metrics.`,
@@ -479,7 +476,7 @@ const composeOperations: Composer = (ctx) => {
   const potential = draft.reduce((s, a) => s + a.item.minutesSavedPerRun * 4, 0);
   const bottlenecks = risksOf(ctx).filter((r) => r.item.kind === 'bottleneck');
 
-  const body = [
+  const body = blocks([
     section(
       'Automation',
       bullet([
@@ -488,20 +485,18 @@ const composeOperations: Composer = (ctx) => {
         `${autos.filter((a) => a.item.requiresApproval).length} would touch something outside OmniOS and stop for approval`,
       ]),
     ),
-    '',
     section(
       'Where work queues',
       bullet(bottlenecks.slice(0, 3).map((b) => `${b.item.label} — ${b.item.mitigation ?? 'no mitigation recorded'}`)) ||
         '• No bottlenecks recorded.',
     ),
-    '',
     section(
       'Read',
       draft.length
         ? `The cheapest win is arming "${draft[0]?.item.name}" — it is already written and touches nothing external.`
         : 'Everything drafted is armed. The next gain comes from removing a bottleneck, not adding an automation.',
     ),
-  ].join('\n');
+  ]);
 
   return {
     summary: `Reviewed ${autos.length} automations and ${bottlenecks.length} bottlenecks.`,
@@ -524,7 +519,7 @@ const composeDevelopment: Composer = (ctx) => {
   );
   const building = roadmap.filter((r) => r.item.stage === 'building');
 
-  const body = [
+  const body = blocks([
     section(
       'In flight',
       bullet([
@@ -532,20 +527,18 @@ const composeDevelopment: Composer = (ctx) => {
         ...active.slice(0, 3).map((t) => `${t.item.title} — active`),
       ]) || '• Nothing in flight.',
     ),
-    '',
     section(
       'Stuck',
       bullet(blocked.map((t) => `${t.item.title} — ${t.item.blockedReason ?? 'reason not recorded'}`)) ||
         '• Nothing blocked.',
     ),
-    '',
     section(
       'Read',
       building.length > 2
         ? `${building.length} things are "building" at once. Finishing one beats advancing three.`
         : 'Work in progress is at a sane level. Keep it there.',
     ),
-  ].join('\n');
+  ]);
 
   return {
     summary: `Read ${tasks.length} engineering tasks and ${roadmap.length} roadmap items.`,
@@ -565,9 +558,8 @@ const composeGeneral: Composer = (ctx, prompt) => {
   const mem = memoryOf(ctx).filter((m) => m.item.kind === 'preference' || m.item.kind === 'decision');
   const cal = calendarOf(ctx).filter((c) => c.item.date === ctx.now.toISOString().slice(0, 10));
 
-  const body = [
+  const body = blocks([
     `I do not have a specialist that clearly owns "${prompt.trim()}", so here is where things stand and who would take it if you narrow it.`,
-    '',
     section(
       'State',
       bullet([
@@ -577,11 +569,9 @@ const composeGeneral: Composer = (ctx, prompt) => {
       ]),
     ),
     mem.length
-      ? `\n${section('Working from what I know about you', bullet(mem.slice(0, 3).map((m) => m.item.text)))}`
-      : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+      ? section('Working from what I know about you', bullet(mem.slice(0, 3).map((m) => m.item.text)))
+      : null,
+  ]);
 
   return {
     summary: 'No clear specialist owner — orienting instead of guessing.',
