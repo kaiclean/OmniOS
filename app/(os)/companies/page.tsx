@@ -70,7 +70,11 @@ export default async function CompaniesPage() {
                       {pluralise(open, 'open item')}
                     </span>
                   </div>
-                  {company.generated ? <Badge tone="outline">Sample workspace</Badge> : null}
+                  {company.generated ? (
+                    <div className="chip-row">
+                      <Badge tone="outline">Sample workspace</Badge>
+                    </div>
+                  ) : null}
                 </div>
               </Link>
             );

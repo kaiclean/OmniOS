@@ -422,8 +422,12 @@
   }
 
   /* Below this width the copilot becomes a sheet rather than a column: three
-     columns at 1200px means none of them are usable. */
-  .copilot {
+     columns at 1200px means none of them are usable. The sheet keys off
+     `data-sheet`, never `data-copilot` — so the column being open by default on
+     a desktop does not make a sheet open itself over a phone. */
+  .copilot,
+  .os[data-copilot='hidden'] .copilot {
+    display: flex;
     position: fixed;
     inset: 0 0 0 auto;
     z-index: 60;
@@ -433,14 +437,8 @@
     transition: transform var(--dur-3) var(--ease-out);
   }
 
-  .os[data-copilot='open'] .copilot {
-    display: flex;
+  .os[data-sheet='open'] .copilot {
     transform: translateX(0);
-  }
-
-  .os[data-copilot='hidden'] .copilot {
-    display: flex;
-    transform: translateX(100%);
   }
 }
 

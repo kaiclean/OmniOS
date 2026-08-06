@@ -277,12 +277,13 @@ function buildView(rows: readonly LedgerRow[], now: Date): MoneyView {
     .sort((a, b) => b.totalMinor - a.totalMinor);
 
   /* ---- anomalies ---- */
-  // Keyed by direction as well as category: an inbound invoice and an outbound
-  // cost filed under the same word are two different populations, and pooling
-  // them would move the median far enough to hide the outlier in either.
+  // Keyed by space and by direction as well as by category. An inbound invoice
+  // and an outbound cost filed under the same word are two different
+  // populations, and one company's ordinary month is another's outlier — pooling
+  // either would move the median far enough to hide the entry worth looking at.
   const populations = new Map<string, LedgerRow[]>();
   for (const row of actuals) {
-    const key = `${row.item.direction}:${row.item.category}`;
+    const key = `${row.space.scopeKey}:${row.item.direction}:${row.item.category}`;
     const list = populations.get(key);
     if (list) list.push(row);
     else populations.set(key, [row]);
@@ -541,9 +542,9 @@ function MoneySide({
         <Panel
           title="Anomalies"
           span={12}
-          subtitle={`Entries more than ${formatNumber(ANOMALY_MULTIPLE, 1)}× the median for the same category and direction`}
+          subtitle={`Entries more than ${formatNumber(ANOMALY_MULTIPLE, 1)}× the median for the same category and direction in the same ledger`}
           action={<SimulatedMark label="Computed from your ledger" />}
-          footer={`${pluralise(view.testedCategories, 'category', 'categories')} tested · ${view.untestedCategories} skipped for having fewer than ${MIN_CATEGORY_SAMPLE} entries, where a median describes the sample rather than a norm.`}
+          footer={`${pluralise(view.testedCategories, 'population')} tested — one per ledger, category and direction · ${view.untestedCategories} skipped for holding fewer than ${MIN_CATEGORY_SAMPLE} entries, where a median describes the sample rather than a norm.`}
           flush
         >
           {view.anomalies.length === 0 ? (
@@ -586,7 +587,9 @@ function MoneySide({
                         })}
                       </td>
                       <td className="num faint">
-                        {formatMinorAmount(anomaly.medianMinor, view.currency, { showCurrency: false })}
+                        {formatMinorAmount(anomaly.medianMinor, anomaly.entry.amount.currency, {
+                          showCurrency: false,
+                        })}
                         <span className="list-secondary"> · n={anomaly.sample}</span>
                       </td>
                       <td className="num">
@@ -650,16 +653,22 @@ function SplitRow({
   currency: CurrencyCode;
 }) {
   const total = split.recurringMinor + split.oneOffMinor;
+  // No entries of a kind is an absence, not a zero balance: a founder reading
+  // "CHF 0" would think something was measured and came to nothing.
   return (
     <tr>
       <td>{label}</td>
       <td className="num">
-        {formatMinorAmount(split.recurringMinor, currency, { compact: true })}
-        <span className="list-secondary"> · {split.recurringCount}</span>
+        {split.recurringCount === 0
+          ? EMPTY
+          : formatMinorAmount(split.recurringMinor, currency, { compact: true })}
+        <span className="list-secondary"> · {pluralise(split.recurringCount, 'entry', 'entries')}</span>
       </td>
       <td className="num">
-        {formatMinorAmount(split.oneOffMinor, currency, { compact: true })}
-        <span className="list-secondary"> · {split.oneOffCount}</span>
+        {split.oneOffCount === 0
+          ? EMPTY
+          : formatMinorAmount(split.oneOffMinor, currency, { compact: true })}
+        <span className="list-secondary"> · {pluralise(split.oneOffCount, 'entry', 'entries')}</span>
       </td>
       <td className="num">{total === 0 ? EMPTY : formatPercent((split.recurringMinor / total) * 100)}</td>
     </tr>

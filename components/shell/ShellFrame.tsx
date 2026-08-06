@@ -39,13 +39,29 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
   const hue = useMemo(() => (space.kind === 'os' ? OS_HUE : hueForSpaceKey(space.key)), [space]);
 
   const [railOpen, setRailOpen] = useState(false);
-  const [copilotOpen, setCopilotOpen] = useState(true);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /**
+   * Two states, because the copilot is two different things.
+   *
+   * Above 1360px it is a permanent third column, and it should be there by
+   * default. Below that it becomes a sheet over the founder's content, and a
+   * sheet that opens itself on a phone is just a screen you have to dismiss
+   * before you can read anything. Deciding at click time — rather than flipping
+   * a shared state in an effect after mount — keeps both defaults correct on the
+   * first paint, with no flash either way.
+   */
+  const [copilotOpen, setCopilotOpen] = useState(true);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Navigating on a phone must close the drawer, or the destination is hidden
-  // behind the thing that took you there.
+  const toggleCopilot = useCallback(() => {
+    if (window.matchMedia('(max-width: 1360px)').matches) setSheetOpen((open) => !open);
+    else setCopilotOpen((open) => !open);
+  }, []);
+
+  // Navigating on a phone must close whatever is covering the destination.
   useEffect(() => {
     setRailOpen(false);
+    setSheetOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -83,6 +99,7 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
       data-space-kind={space.kind}
       data-rail={railOpen ? 'open' : 'closed'}
       data-copilot={copilotOpen ? 'open' : 'hidden'}
+      data-sheet={sheetOpen ? 'open' : 'closed'}
     >
       {railOpen ? (
         <button
@@ -121,9 +138,9 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
             <button
               type="button"
               className="btn btn--ghost btn--icon"
-              aria-label={copilotOpen ? 'Hide assistant' : 'Show assistant'}
-              aria-pressed={copilotOpen}
-              onClick={() => setCopilotOpen((open) => !open)}
+              aria-label="Toggle assistant"
+              aria-expanded={copilotOpen || sheetOpen}
+              onClick={toggleCopilot}
             >
               <Icon name="panel" />
             </button>
