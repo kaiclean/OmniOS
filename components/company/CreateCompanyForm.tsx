@@ -175,7 +175,7 @@ function Field({
           id={name}
           name={name}
           required={required}
-          // eslint-disable-next-line jsx-a11y/no-autofocus -- single-purpose page; the founder came here to type this field
+          // Single-purpose page: the founder navigated here to type this field.
           autoFocus={autoFocus}
           aria-describedby={describedBy || undefined}
           aria-invalid={error ? true : undefined}

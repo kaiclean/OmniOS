@@ -3,15 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   typescript: {
-    // Type errors fail the build. `npm run verify` runs tsc first anyway.
+    // Type errors fail the build. `npm run verify` also runs tsc first, so a
+    // type error surfaces before the slowest step rather than inside it.
     ignoreBuildErrors: false,
-  },
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
-  experimental: {
-    // The workspace store is a server-only filesystem adapter; keep it off the client bundle.
-    serverSourceMaps: false,
   },
 };
 

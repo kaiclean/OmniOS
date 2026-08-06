@@ -153,7 +153,7 @@ export default async function BrainPage() {
             </Rule>
             <Rule term="May never cross">
               A company name, a person, a counterparty, an amount, an email address, an IBAN, a phone
-              number, a credential or a wallet address — and no company's records ever reach another
+              number, a credential or a wallet address — and no company&rsquo;s records ever reach another
               company or your private life.
             </Rule>
             <Rule term="Direction">

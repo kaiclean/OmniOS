@@ -70,9 +70,14 @@ export function CommandPalette({
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
+  // A new query means a new result list, so the highlight belongs back at the
+  // top. Adjusting during render rather than in an effect avoids the extra pass
+  // that would briefly highlight the wrong row.
+  const [queryForActive, setQueryForActive] = useState(query);
+  if (queryForActive !== query) {
+    setQueryForActive(query);
     setActive(0);
-  }, [query]);
+  }
 
   useEffect(() => {
     listRef.current

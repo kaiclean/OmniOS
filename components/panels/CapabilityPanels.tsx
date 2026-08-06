@@ -375,7 +375,7 @@ function KnowledgePanel({ title, span, spec, ctx }: PanelProps) {
   return (
     <Panel title={title} span={span} flush>
       {docs.length === 0 ? (
-        <Empty title="No documents">Decisions and processes recorded here become the AI's context.</Empty>
+        <Empty title="No documents">Decisions and processes recorded here become the AI&rsquo;s context.</Empty>
       ) : (
         <div className="list">
           {docs.map((doc) => (

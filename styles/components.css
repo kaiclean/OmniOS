@@ -1184,6 +1184,17 @@
   text-decoration-color: var(--accent);
 }
 
+/* A group heading that sits flush inside a list, used by the Brain to break the
+   shared-memory region into capabilities and the specialist roster into domains.
+   Without it a twenty-five row list reads as one undifferentiated column, and no
+   existing class draws a heading that lines up with `.list-row` padding —
+   `.section-head` carries page-level margins that would break the flush panel. */
+.list-group-head {
+  padding: var(--s-3) var(--s-5) var(--s-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--hairline-faint);
+}
+
 /* Metric values never wrap: "CHF 45.8K" breaking across two lines makes a
    number look like two numbers. */
 .metric-value,

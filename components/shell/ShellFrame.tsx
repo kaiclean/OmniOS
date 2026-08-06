@@ -59,10 +59,14 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
   }, []);
 
   // Navigating on a phone must close whatever is covering the destination.
-  useEffect(() => {
+  // Done during render rather than in an effect so the overlay never paints for
+  // a frame on top of the page it just navigated to.
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
     setRailOpen(false);
     setSheetOpen(false);
-  }, [pathname]);
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
