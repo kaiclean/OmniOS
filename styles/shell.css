@@ -1,0 +1,464 @@
+/* ============================================================================
+   The OS shell — rail, overview strip, canvas, copilot.
+
+   Three columns that never move: navigation on the left, the founder's work in
+   the middle, one intelligence on the right. The middle column is the only thing
+   that changes when you move between spaces; the frame staying put is what makes
+   this feel like an operating system rather than a series of pages.
+   ========================================================================== */
+
+.os {
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--copilot-w);
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--canvas);
+  /* Signature: the whole shell carries a breath of the active space's hue. */
+  background-image: radial-gradient(120% 80% at 50% -20%, var(--tint-wash), transparent 70%);
+  transition: background-image var(--dur-3) var(--ease-out);
+}
+
+.os[data-copilot='hidden'] {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) 0;
+}
+
+/* ----------------------------------------------------------------- rail --- */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--hairline);
+  background: color-mix(in oklab, var(--surface-1) 92%, var(--canvas));
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: var(--topbar-h);
+  padding: 0 var(--s-4);
+  border-bottom: 1px solid var(--hairline-faint);
+}
+
+.rail-mark {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: var(--fs-micro);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0;
+  box-shadow: var(--edge-highlight-strong);
+  transition: background var(--dur-3) var(--ease-out);
+}
+
+.rail-title {
+  font-size: var(--fs-small);
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.01em;
+}
+
+.rail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s-4) var(--s-3) var(--s-6);
+}
+
+.rail-group + .rail-group {
+  margin-top: var(--s-6);
+}
+
+.rail-group-label {
+  padding: 0 var(--s-3) var(--s-2);
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  padding: 0.4375rem var(--s-3);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  line-height: 1.4;
+  transition:
+    background var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
+}
+
+.nav-item:hover {
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+
+.nav-item[aria-current='page'] {
+  background: var(--surface-3);
+  color: var(--text-1);
+  font-weight: var(--weight-medium);
+}
+
+/* The active marker is a 2px stub in the space hue — the smallest possible
+   mark that still reads instantly in peripheral vision. */
+.nav-item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--s-3) * -1 + 2px);
+  top: 50%;
+  width: 2px;
+  height: 1rem;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+/* Icons stay achromatic — the tint lives in the room, not in the instrument.
+   The 2px stub above is the only coloured mark in the rail. */
+.nav-icon {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  color: var(--text-4);
+  transition: color var(--dur-1) var(--ease-out);
+}
+
+.nav-item:hover .nav-icon,
+.nav-item[aria-current='page'] .nav-icon {
+  color: var(--text-2);
+}
+
+.nav-count {
+  margin-left: auto;
+  color: var(--text-4);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Space switcher: companies and personal life, each carrying its own dot. */
+.space-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  width: 100%;
+  padding: 0.4375rem var(--s-3);
+  border-radius: var(--r-sm);
+  color: var(--text-2);
+  font-size: var(--fs-small);
+  transition: background var(--dur-1) var(--ease-out);
+}
+
+.space-item:hover {
+  background: var(--surface-2);
+  color: var(--text-1);
+}
+
+.space-item[data-active='true'] {
+  background: var(--surface-3);
+  color: var(--text-1);
+}
+
+.space-dot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--r-full);
+  box-shadow: 0 0 0 3px color-mix(in oklab, currentColor 14%, transparent);
+}
+
+.rail-foot {
+  border-top: 1px solid var(--hairline-faint);
+  padding: var(--s-3);
+}
+
+/* ----------------------------------------------------------------- main --- */
+
+.os-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.strip {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  height: var(--strip-h);
+  padding: 0 var(--s-5);
+  border-bottom: 1px solid var(--hairline);
+  background: color-mix(in oklab, var(--surface-1) 70%, var(--canvas));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.strip::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * The seam. One hairline under the overview strip carrying the active space's
+ * hue — the system's pulse. It is the only ambient animation in OmniOS, and it
+ * only moves while the assistant is actually working.
+ */
+.seam {
+  position: absolute;
+  inset: auto 0 -1px;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--accent-hairline) 18%,
+    var(--accent) 50%,
+    var(--accent-hairline) 82%,
+    transparent
+  );
+  opacity: 0.5;
+  transition: opacity var(--dur-3) var(--ease-out);
+}
+
+.seam[data-thinking='true'] {
+  opacity: 1;
+  animation: seam-pulse 1.6s var(--ease-in-out) infinite;
+}
+
+@keyframes seam-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seam[data-thinking='true'] {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+:root[data-motion='reduced'] .seam[data-thinking='true'] {
+  animation: none;
+  opacity: 1;
+}
+
+.strip-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.125rem;
+  flex: 0 0 auto;
+  min-width: 8.5rem;
+  padding: 0 var(--s-5) 0 0;
+  margin-right: var(--s-5);
+  border-right: 1px solid var(--hairline-faint);
+}
+
+.strip-cell:last-of-type {
+  border-right: none;
+  margin-right: 0;
+}
+
+.strip-label {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.strip-value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  font-size: 1.0625rem;
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.014em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.strip-suffix {
+  font-size: var(--fs-micro);
+  font-weight: var(--weight-regular);
+  color: var(--text-3);
+  letter-spacing: 0;
+}
+
+.strip-cell--link {
+  transition: opacity var(--dur-1) var(--ease-out);
+}
+
+.strip-cell--link:hover {
+  opacity: 0.75;
+}
+
+.strip-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-left: auto;
+  padding-left: var(--s-5);
+}
+
+/* The rail toggle only exists on narrow viewports; the rail is permanent above. */
+.rail-toggle {
+  display: none;
+  align-self: center;
+  margin-right: var(--s-3);
+}
+
+@media (max-width: 900px) {
+  .rail-toggle {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 700px) {
+  .palette-trigger-label {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------- canvas --- */
+
+.canvas {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas {
+    scroll-behavior: auto;
+  }
+}
+
+.canvas-inner {
+  max-width: var(--content-max);
+  padding: var(--s-8) var(--s-8) var(--s-16);
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) {
+  .canvas-inner {
+    padding: var(--s-5) var(--s-4) var(--s-12);
+  }
+}
+
+/* -------------------------------------------------------------- copilot --- */
+
+.copilot {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--hairline);
+  background: color-mix(in oklab, var(--surface-1) 92%, var(--canvas));
+}
+
+.os[data-copilot='hidden'] .copilot {
+  display: none;
+}
+
+.copilot-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: var(--topbar-h);
+  padding: 0 var(--s-4);
+  border-bottom: 1px solid var(--hairline-faint);
+}
+
+.copilot-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.copilot-compose {
+  border-top: 1px solid var(--hairline-faint);
+  padding: var(--s-3) var(--s-4) var(--s-4);
+}
+
+/* --------------------------------------------------------- responsive ---- */
+
+@media (max-width: 1360px) {
+  .os,
+  .os[data-copilot='hidden'] {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  }
+
+  /* Below this width the copilot becomes a sheet rather than a column: three
+     columns at 1200px means none of them are usable. */
+  .copilot {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 60;
+    width: min(23.5rem, 100vw);
+    box-shadow: var(--lift-high);
+    transform: translateX(100%);
+    transition: transform var(--dur-3) var(--ease-out);
+  }
+
+  .os[data-copilot='open'] .copilot {
+    display: flex;
+    transform: translateX(0);
+  }
+
+  .os[data-copilot='hidden'] .copilot {
+    display: flex;
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 900px) {
+  .os,
+  .os[data-copilot='hidden'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 70;
+    width: var(--rail-w);
+    transform: translateX(-100%);
+    transition: transform var(--dur-3) var(--ease-out);
+    box-shadow: var(--lift-high);
+  }
+
+  .os[data-rail='open'] .rail {
+    transform: translateX(0);
+  }
+}
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(2px);
+  animation: fade-in var(--dur-2) var(--ease-out);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
