@@ -138,15 +138,18 @@ export default async function BrainPage() {
         <Panel
           title="Read access, as the store enforces it"
           subtitle="Rows read; columns are read. Computed with canRead(), the same function the loaders use."
-          span={8}
+          span={12}
           flush
           footer="Adding a company adds a row and a column, and every other company's row gains a blocked cell. Isolation is the default, not a setting."
         >
+          {/* Full width rather than beside the prose: the shared columns are the
+              whole point of the matrix, and at eight columns they were the first
+              thing to scroll out of sight. */}
           <CrossingMatrix spaces={spaces} sharedRegions={populated.slice(0, 2)} />
         </Panel>
 
-        <Panel title="The rule in words" span={4}>
-          <dl className="stack">
+        <Panel title="The rule in words" span={12}>
+          <dl className="two-up">
             <Rule term="May cross">
               One generalised sentence at a time, promoted by you, through the gate below. It becomes
               a new record in shared capability memory; the original never moves.
@@ -358,6 +361,13 @@ function Rule({ term, children }: { term: string; children: ReactNode }) {
   );
 }
 
+/** Who put the record there. The raw enum reads as jargon in a sentence. */
+const SOURCE_LABELS: Readonly<Record<MemoryRecord['source'], string>> = {
+  founder: 'recorded by you',
+  assistant: 'recorded by the assistant',
+  observation: 'observed from your records',
+};
+
 interface MemoryEntry {
   readonly record: MemoryRecord;
   readonly space: SpaceView;
@@ -399,7 +409,7 @@ function MemoryRow({ record, verdict }: { record: MemoryRecord; verdict: Promoti
           <span aria-hidden="true">·</span>
           <span>{pluralise(record.useCount, 'use')}</span>
           <span aria-hidden="true">·</span>
-          <span>recorded by the {record.source}</span>
+          <span>{SOURCE_LABELS[record.source]}</span>
           <span aria-hidden="true">·</span>
           <span>{formatRelative(record.createdAt)}</span>
         </div>
