@@ -87,7 +87,7 @@ function Cell({ label, value, suffix, href, tone }: CellSpec) {
     <>
       <span className="strip-label">{label}</span>
       <span className="strip-value">
-        <span className={tone && tone !== 'warn' ? `delta--${tone}` : undefined}>{value}</span>
+        <span className={tone ? `delta--${tone}` : undefined}>{value}</span>
         {suffix ? <span className="strip-suffix">{suffix}</span> : null}
       </span>
     </>

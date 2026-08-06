@@ -426,6 +426,12 @@
   color: var(--text-4);
 }
 
+/* Not a delta but the same treatment: a figure that is waiting on a decision
+   rather than moving in a direction. Used by the overview strip. */
+.delta--warn {
+  color: var(--warn);
+}
+
 /*
  * Signature: the rail. Every metric carries a hairline history beneath it —
  * enough to see a shape, never enough to become a chart. No axes, no legend, no

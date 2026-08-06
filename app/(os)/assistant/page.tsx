@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { conversation } from '@/lib/ai/assistant';
-import { activeProvider } from '@/lib/ai/providers';
+import { activeProvider, providerStatus } from '@/lib/ai/providers';
 import { ASSISTANT_SUGGESTIONS } from '@/lib/ai/prompts';
 import { SPECIALISTS, getSpecialist } from '@/lib/ai/specialists';
 import { getCapability } from '@/lib/capabilities/registry';
@@ -252,8 +252,13 @@ function Turn({
       <div className="msg-meta">
         <span>{formatRelative(message.at)}</span>
         <span aria-hidden="true">·</span>
-        <span>{message.providerId}</span>
-        {message.simulated ? <SimulatedMark label="Reasoned locally" /> : null}
+        {/* Per turn, not per page: a provider can be configured today and have
+            failed on the turn you are reading, and the answer must say which. */}
+        {message.simulated ? (
+          <SimulatedMark label="Composed on this machine" />
+        ) : (
+          <span>Worded by {providerLabel(message.providerId)}</span>
+        )}
       </div>
       {message.plan ? (
         <PlanDetail plan={message.plan} companies={companies} personalName={personalName} />
@@ -365,6 +370,11 @@ function statusTone(status: DelegationStep['status']): Tone {
 }
 
 /* ---------------------------------------------------------------- utils --- */
+
+/** A stored turn keeps a provider id; the founder should read the provider's name. */
+function providerLabel(providerId: string): string {
+  return providerStatus().find((entry) => entry.id === providerId)?.label ?? providerId;
+}
 
 function countBy(ids: readonly string[]): Map<string, number> {
   const counts = new Map<string, number>();
