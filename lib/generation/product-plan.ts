@@ -121,7 +121,7 @@ const AUTHORS: Record<ProductPlanSection, SectionAuthor> = {
     specialistId: 'project-manager',
     always: (c) => [
       `The line everything is judged against: ${c.problem}. A feature that does not move it is out of v1.`,
-      `Written from ${c.audience} side of the screen — a requirement nobody there would ask for is a requirement we invented.`,
+      `Written from the user’s side of the screen — a requirement ${c.audience} would not ask for is a requirement we invented.`,
       `Minimum viable path: capture a ${c.table}, see it in one list, and take the single action that produces the outcome they came for.`,
     ],
     options: () => [
@@ -254,7 +254,7 @@ const AUTHORS: Record<ProductPlanSection, SectionAuthor> = {
     heading: 'How it is proven',
     specialistId: 'qa',
     always: (c) => [
-      `One end-to-end test walking the full loop ${c.audience} perform. It catches more than fifty unit tests placed around it.`,
+      `One end-to-end test walking the full loop for ${c.audience}, start to finish. It catches more than fifty unit tests placed around it.`,
       'Pure logic — pricing, scheduling, scoring, permissions — is unit tested and deterministic. No clocks, no randomness.',
       'Every bug gets its failing test first. Without it the bug returns, usually in the same month.',
     ],
@@ -288,7 +288,7 @@ const AUTHORS: Record<ProductPlanSection, SectionAuthor> = {
     heading: 'How anyone hears about it',
     specialistId: 'marketer',
     always: (c) => [
-      `Positioning tested before any spend: ${c.name} exists because ${c.problem}. If ${c.audience} do not repeat that back, the words are wrong.`,
+      `Positioning tested before any spend: ${c.name} exists because ${c.problem}. If ${c.audience} cannot repeat that back, the words are wrong.`,
       'One channel first, chosen because that audience is already there, worked until it compounds or is disproven.',
       'Proof over adjectives — show it working on a real case, including the part that is still unfinished.',
     ],
@@ -305,7 +305,7 @@ const AUTHORS: Record<ProductPlanSection, SectionAuthor> = {
     heading: 'The first release',
     specialistId: 'chief-of-staff',
     always: (c) => [
-      `Release privately to ${c.rng.int(8, 25)} people who match ${c.audience} first, while it can still be fixed quietly.`,
+      `Private release first, to ${c.rng.int(8, 25)} people drawn from ${c.audience}, while everything can still be fixed quietly.`,
       'Go/no-go conditions written in advance: what has to work, and what is allowed to be broken.',
       'The week after launch belongs to what launch reveals. Do not schedule the next feature into it.',
     ],

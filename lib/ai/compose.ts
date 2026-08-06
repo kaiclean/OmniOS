@@ -611,6 +611,11 @@ const BY_DOMAIN: Partial<Record<string, Composer>> = {
 };
 
 export function compose(ctx: AssistantContext, prompt: string, routing: RoutingResult): Composition {
+  // Zero matches means the router fell back to the Chief of Staff because nobody
+  // claimed the request — not because the Chief of Staff was the right answer.
+  // Replying with today's plan to a question it did not understand would be a
+  // non-sequitur, so say so and orient instead.
+  if (routing.scores.length === 0) return composeGeneral(ctx, prompt);
   const composer = BY_DOMAIN[routing.lead.domain] ?? composeGeneral;
   return composer(ctx, prompt);
 }

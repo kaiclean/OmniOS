@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { capabilitiesFor, capabilityLabel } from '@/lib/capabilities/registry';
-import { panel } from '@/lib/capabilities/panels';
+import { ownedBy, panel } from '@/lib/capabilities/panels';
 import { loadCompanySpace } from '@/lib/data/space';
 import { formatDurationMinutes, formatMinorAmount, pluralise } from '@/lib/format';
 import { Badge, PageHead, SectionHead } from '@/components/ui/primitives';
@@ -23,8 +23,10 @@ export default async function CompanyOverviewPage({
   const { company, data, sharedMemory, basePath } = await loadCompanySpace(companyId);
   const capabilities = capabilitiesFor('company', company.disabledCapabilityIds);
 
+  // Each contributed panel keeps its own capability, or Marketing's tile would
+  // silently render whichever capability happened to own this page.
   const overviewSpecs = capabilities.flatMap((capability) =>
-    (capability.overviewPanels ?? []).map((spec) => ({ spec, capabilityId: capability.id })),
+    (capability.overviewPanels ?? []).map((spec) => ownedBy(spec, capability.id)),
   );
 
   const openTasks = data.tasks.filter((t) => t.status !== 'done').length;
@@ -51,7 +53,7 @@ export default async function CompanyOverviewPage({
         }
       />
 
-      <section className="panel span-12" style={{ marginBottom: 'var(--s-8)' }}>
+      <section className="panel" style={{ marginBottom: 'var(--s-8)' }}>
         <div className="panel-body">
           <div className="exec-row">
             <ExecStat label="Net position" value={formatMinorAmount(revenue - costs, company.baseCurrency, { compact: true })} />
@@ -65,12 +67,10 @@ export default async function CompanyOverviewPage({
       </section>
 
       <CapabilityPanels
-        specs={overviewSpecs.map((entry) => entry.spec)}
+        specs={overviewSpecs}
         ctx={{
           spaceKind: 'company',
-          // Overview panels declare their own filter; the capability id here is
-          // only the fallback for panels that asked to be scoped to "self".
-          capabilityId: overviewSpecs[0]?.capabilityId ?? 'executive',
+          capabilityId: 'executive',
           data,
           company,
           sharedMemory,

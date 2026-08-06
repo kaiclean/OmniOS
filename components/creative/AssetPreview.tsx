@@ -21,6 +21,24 @@ const RATIOS: Record<CreativeAsset['aspect'], number> = {
   '3:2': 1.5,
 };
 
+/**
+ * Seven bar heights from one seed.
+ *
+ * FNV-1a — the same hash the id suffixes and space tints use — then a Knuth
+ * multiplicative step per bar. Kept out of the component body so the walking
+ * state is plainly a pure calculation: two assets with the same seed must draw
+ * identically forever, including across deploys.
+ */
+function barsFor(seed: string): number[] {
+  let h = hash32(seed);
+  const out: number[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    h = Math.imul(h ^ (i + 1), 2654435761) >>> 0;
+    out.push(12 + (h % 76));
+  }
+  return out;
+}
+
 export function AssetPreview({
   seed,
   aspect,
@@ -28,13 +46,7 @@ export function AssetPreview({
   seed: string;
   aspect: CreativeAsset['aspect'];
 }) {
-  // FNV-1a, the same hash the id suffixes and space tints use: two assets with the
-  // same seed must draw identically forever, including across deploys.
-  let h = hash32(seed);
-  const bars = Array.from({ length: 7 }, (_, i) => {
-    h = Math.imul(h ^ (i + 1), 2654435761) >>> 0;
-    return 12 + (h % 76);
-  });
+  const bars = barsFor(seed);
 
   return (
     <div className="asset-preview" style={{ aspectRatio: String(RATIOS[aspect]) }} aria-hidden="true">

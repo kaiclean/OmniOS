@@ -80,7 +80,9 @@ function scoped<T extends { capabilityId: string }>(
   spec: PanelSpec,
   ctx: PanelContext,
 ): T[] {
-  const list = spec.capabilityFilter === 'all' ? [...items] : items.filter((i) => i.capabilityId === ctx.capabilityId);
+  const owner = spec.capabilityId ?? ctx.capabilityId;
+  const list =
+    spec.capabilityFilter === 'all' ? [...items] : items.filter((i) => i.capabilityId === owner);
   return spec.limit ? list.slice(0, spec.limit) : list;
 }
 
@@ -1140,8 +1142,9 @@ function CalendarPanel({ title, span, ctx }: SimplePanelProps) {
 
 function MemoryPanel({ title, span, spec, ctx }: PanelProps) {
   const own = scoped(ctx.data.memory, spec, ctx);
+  const owner = spec.capabilityId ?? ctx.capabilityId;
   const shared = (ctx.sharedMemory ?? []).filter(
-    (m) => spec.capabilityFilter === 'all' || m.capabilityId === ctx.capabilityId,
+    (m) => spec.capabilityFilter === 'all' || m.capabilityId === owner,
   );
 
   return (

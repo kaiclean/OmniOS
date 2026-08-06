@@ -158,3 +158,27 @@ describe('delegation plans', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
+
+describe('the suggestions OmniOS offers before the founder types', () => {
+  it('all reach a real specialist rather than the empty fallback', async () => {
+    const { ASSISTANT_SUGGESTIONS, COMPANY_SUGGESTIONS } = await import('@/lib/ai/prompts');
+    for (const prompt of ASSISTANT_SUGGESTIONS) {
+      expect(scoreSpecialists(prompt, BOTH).length, `"${prompt}" matched nobody`).toBeGreaterThan(0);
+    }
+    for (const prompt of COMPANY_SUGGESTIONS) {
+      expect(
+        scoreSpecialists(prompt, ['company']).length,
+        `"${prompt}" matched nobody in a company`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it('routes each founder-level suggestion to a distinct area of the system', () => {
+    const leads = [
+      'What should I do today?',
+      'How is cash flow across everything?',
+      'Who have I not spoken to in too long?',
+    ].map((prompt) => route(prompt, BOTH).lead.domain);
+    expect(new Set(leads).size).toBe(leads.length);
+  });
+});

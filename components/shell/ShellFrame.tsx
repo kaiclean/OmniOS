@@ -105,7 +105,9 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
           >
             <Icon name="menu" />
           </button>
-          {strip}
+          {/* Only the metrics scroll. The actions must stay reachable at every
+              width — a command palette you cannot reach is not a command palette. */}
+          <div className="strip-scroll">{strip}</div>
           <div className="strip-actions">
             <button
               type="button"

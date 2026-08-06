@@ -49,7 +49,21 @@ export interface PanelSpec {
   readonly limit?: number;
   /** Restrict a panel to records belonging to one capability. */
   readonly capabilityFilter?: 'self' | 'all';
+  /**
+   * Which capability "self" means for this panel.
+   *
+   * Normally unset — a panel inherits the capability whose page it is on. It is
+   * set when panels from several capabilities are composed onto one screen (a
+   * space's Executive Overview), so Marketing's tile keeps showing marketing
+   * records rather than inheriting whatever capability owns the page.
+   */
+  readonly capabilityId?: string;
   readonly emptyHint?: string;
+}
+
+/** Bind a spec to the capability that declared it, for cross-capability screens. */
+export function ownedBy(spec: PanelSpec, capabilityId: string): PanelSpec {
+  return { ...spec, capabilityId };
 }
 
 export function panelTitle(spec: PanelSpec, spaceKind: 'company' | 'personal'): string {

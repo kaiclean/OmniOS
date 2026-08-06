@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { capabilitiesFor, capabilityLabel } from '@/lib/capabilities/registry';
-import { panel } from '@/lib/capabilities/panels';
+import { ownedBy, panel } from '@/lib/capabilities/panels';
 import { loadPersonalSpace } from '@/lib/data/space';
 import { EMPTY, daysBetween, formatDurationMinutes, formatNumber, pluralise } from '@/lib/format';
 import { deepWorkBudgetMinutes, energyLabel, energyOf } from '@/lib/personal/energy';
@@ -32,7 +32,10 @@ export default async function LifeOverviewPage() {
   const openAdmin = data.lifeAdmin.filter((i) => i.status !== 'done');
   const openTasks = data.tasks.filter((t) => t.status !== 'done');
 
-  const overviewSpecs = capabilities.flatMap((capability) => capability.overviewPanels ?? []);
+  // Each contributed panel keeps its own capability — see the company overview.
+  const overviewSpecs = capabilities.flatMap((capability) =>
+    (capability.overviewPanels ?? []).map((spec) => ownedBy(spec, capability.id)),
+  );
 
   return (
     <>
@@ -47,7 +50,7 @@ export default async function LifeOverviewPage() {
         }
       />
 
-      <section className="panel span-12" style={{ marginBottom: 'var(--s-8)' }}>
+      <section className="panel" style={{ marginBottom: 'var(--s-8)' }}>
         <div className="panel-body">
           <div className="exec-row">
             <LifeStat

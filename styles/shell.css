@@ -191,14 +191,29 @@
   align-items: stretch;
   gap: 0;
   height: var(--strip-h);
+  /* As a flex item in .os-main it would otherwise shrink below its own height
+     and clip the metric labels. The strip is fixed furniture; only the canvas
+     flexes. */
+  flex: 0 0 auto;
   padding: 0 var(--s-5);
   border-bottom: 1px solid var(--hairline);
   background: color-mix(in oklab, var(--surface-1) 70%, var(--canvas));
+}
+
+/* `overflow-x: auto` alone would make this scrollable vertically too — the
+   computed overflow-y becomes auto — and a stray scroll would clip the labels
+   out of a fixed-height bar. Pinning overflow-y is the fix, not a precaution. */
+.strip-scroll {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
 }
 
-.strip::-webkit-scrollbar {
+.strip-scroll::-webkit-scrollbar {
   display: none;
 }
 
@@ -305,19 +320,24 @@
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  margin-left: auto;
+  flex: 0 0 auto;
   padding-left: var(--s-5);
+  /* A hairline separates the scrolling metrics from the fixed controls, so a
+     half-scrolled cell never reads as part of the toolbar. */
+  border-left: 1px solid var(--hairline-faint);
 }
 
-/* The rail toggle only exists on narrow viewports; the rail is permanent above. */
-.rail-toggle {
+/* The rail toggle only exists on narrow viewports; the rail is permanent above.
+   Qualified with .btn because components.css loads after this file and would
+   otherwise win the `display` declaration on equal specificity. */
+.btn.rail-toggle {
   display: none;
   align-self: center;
   margin-right: var(--s-3);
 }
 
 @media (max-width: 900px) {
-  .rail-toggle {
+  .btn.rail-toggle {
     display: inline-flex;
   }
 }

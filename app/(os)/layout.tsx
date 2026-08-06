@@ -3,6 +3,7 @@ import { loadSpaces, overviewSnapshot } from '@/lib/data/aggregate';
 import { getWorkspace } from '@/lib/data/store';
 import { conversation } from '@/lib/ai/assistant';
 import { activeProvider } from '@/lib/ai/providers';
+import { ASSISTANT_SUGGESTIONS } from '@/lib/ai/prompts';
 import { isIconName } from '@/components/ui/Icon';
 import { ShellFrame } from '@/components/shell/ShellFrame';
 import type { Command } from '@/components/shell/CommandPalette';
@@ -49,12 +50,7 @@ export default async function OsLayout({ children }: { children: React.ReactNode
           initialMessages={initialMessages}
           companyNames={companyNames}
           personalName={workspace.personal.displayName}
-          suggestions={[
-            'What should I do today?',
-            'How is cash flow across everything?',
-            'What is slipping that I have not noticed?',
-            'Who have I not spoken to in too long?',
-          ]}
+          suggestions={ASSISTANT_SUGGESTIONS}
         />
       }
     >
