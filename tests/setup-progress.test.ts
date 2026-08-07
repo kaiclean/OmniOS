@@ -90,4 +90,67 @@ describe('the digest can fold reads away without the timeline losing them', () =
     expect(read?.readOnly).toBe(true);
     expect(write?.readOnly).toBeUndefined();
   });
+
+  it('excludes reads before the limit, so a lookup-heavy stretch cannot empty the digest', () => {
+    const reads = Array.from({ length: 5 }, (_, i) =>
+      call({ id: `read-${i}`, at: `2026-08-07T12:0${i}:00.000Z` }),
+    );
+    const write = call({
+      id: 'the-write',
+      toolId: 'create_task',
+      risk: 'write',
+      preview: 'Create a task.',
+      at: '2026-08-07T09:00:00.000Z',
+    });
+    const events = buildTimeline([space({ toolCalls: [...reads, write] })], { grants: [], upgrades: [] }, {
+      limit: 2,
+      excludeReadOnly: true,
+    });
+    // The older write survives even though five newer reads fill the raw window.
+    expect(events.map((event) => event.id)).toEqual(['call:the-write']);
+  });
+});
+
+describe('an off-switch is not a hire', () => {
+  it('the agent step completes on a real hire, never on switching a built-in off', () => {
+    const offSwitch = {
+      id: 'engineer', overridesBuiltIn: true, offSwitch: true, enabled: false,
+    } as never;
+    const hire = { id: 'podcast-producer', overridesBuiltIn: false, enabled: true } as never;
+
+    const withOffSwitch = setupProgress([space({ customAgents: [offSwitch] })], EMPTY_ROOT, { hasRealProvider: false });
+    expect(withOffSwitch.steps.find((step) => step.id === 'agent')?.done).toBe(false);
+
+    const withHire = setupProgress([space({ customAgents: [hire] })], EMPTY_ROOT, { hasRealProvider: false });
+    expect(withHire.steps.find((step) => step.id === 'agent')?.done).toBe(true);
+  });
+});
+
+describe('a plan approval only claims the tasks that exist', () => {
+  it('says so plainly when the gate held some of them', () => {
+    const meeting = {
+      id: 'meet-1',
+      scope,
+      createdAt: '2026-08-07T09:00:00.000Z',
+      updatedAt: '2026-08-07T09:30:00.000Z',
+      topic: 'Ship',
+      stage: 'executing',
+      participantIds: ['engineer'],
+      turns: [],
+      plan: {
+        summary: 's',
+        decisions: [],
+        risks: [],
+        simulated: false,
+        tasks: [
+          { title: 'a', capabilityId: 'operations', ownerSpecialistId: 'engineer', taskId: 'task-a' },
+          { title: 'b', capabilityId: 'operations', ownerSpecialistId: 'engineer' },
+        ],
+      },
+      approvedAt: '2026-08-07T09:30:00.000Z',
+    } as never;
+    const events = buildTimeline([space({ meetings: [meeting] })], { grants: [], upgrades: [] });
+    const approved = events.find((event) => event.id === 'meeting-approved:meet-1');
+    expect(approved?.detail).toBe('1 of 2 tasks created — the rest wait at the gate');
+  });
 });

@@ -37,11 +37,13 @@ export async function directAgentReply(
      * searched and found three records must not claim there are none.
      */
     readonly activity?: string;
+    /** Already-resolved provider, so one turn probes the vault once, not twice. */
+    readonly provider?: Awaited<ReturnType<typeof activeProvider>>;
   } = {},
 ): Promise<AgentReply> {
   const data = await readScope(scope);
   const briefing = briefingFor(specialist, data);
-  const provider = await activeProvider();
+  const provider = options.provider ?? (await activeProvider());
 
   if (!provider.simulated) {
     try {

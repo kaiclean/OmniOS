@@ -51,8 +51,10 @@ export async function teamViewFor(scope: Scope): Promise<{
         kind: 'built-in',
         enabled: true,
       });
-    } else if (!override.enabled && !override.presetId) {
-      // A pure off-switch: show the built-in, off.
+    } else if (override.offSwitch) {
+      // A pure off-switch: show the built-in, off. A customised override that
+      // is merely disabled falls through and keeps its authored identity
+      // visible — otherwise the founder's charter would silently vanish.
       rows.push({
         id: builtIn.id,
         name: builtIn.name,

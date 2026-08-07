@@ -28,7 +28,7 @@ export default async function CompanyAgentPage({
   const channel = agentChannel(agent.id);
   const messages: AgentChatMessage[] = data.messages
     .filter((message) => message.channel === channel)
-    .sort((a, b) => (a.at < b.at ? -1 : 1))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
     .map((message) => ({
       id: message.id,
       role: message.role === 'founder' ? 'user' : 'assistant',

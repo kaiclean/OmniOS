@@ -82,16 +82,32 @@ function transcript(meeting: Meeting, limit = 14, names: Readonly<Record<string,
 }
 
 /** One specialist speaks. Grounded first; model-voiced when possible. */
+export interface TurnContext {
+  readonly roster: readonly SpecialistAgent[];
+  readonly data: ScopeData;
+  readonly provider: Awaited<ReturnType<typeof activeProvider>>;
+}
+
+/** Resolved once per founder message; an "ask everyone" round reuses it five times. */
+export async function turnContext(scope: Scope): Promise<TurnContext> {
+  return {
+    roster: await rosterFor(scope),
+    data: await readScope(scope),
+    provider: await activeProvider(),
+  };
+}
+
 export async function specialistTurn(
   meeting: Meeting,
   scope: Scope,
   specialistId: string,
   founderPrompt: string,
   now: Date,
+  preloaded?: TurnContext,
 ): Promise<MeetingTurn> {
   // The room's roster is the scope's roster: an agent the founder hired here
   // can be seated and speak; one hired elsewhere does not exist in this room.
-  const roster = await rosterFor(scope);
+  const { roster, data, provider } = preloaded ?? (await turnContext(scope));
   const specialist = roster.find((s) => s.id === specialistId);
   const at = now.toISOString();
   if (!specialist) {
@@ -99,9 +115,7 @@ export async function specialistTurn(
   }
 
   const names = rosterNames(roster);
-  const data = await readScope(scope);
   const briefing = briefingFor(specialist, data);
-  const provider = await activeProvider();
 
   if (!provider.simulated) {
     try {

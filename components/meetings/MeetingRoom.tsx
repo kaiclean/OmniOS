@@ -11,7 +11,7 @@ import {
   openMeeting,
   speakInMeeting,
 } from '@/lib/actions/meetings';
-import { Badge, Empty } from '@/components/ui/primitives';
+import { Badge, Empty, SimulatedMark } from '@/components/ui/primitives';
 
 /**
  * The room.
@@ -120,7 +120,10 @@ export function MeetingRoom({
       {active.stage === 'plan-ready' && active.plan ? (
         <div className="panel">
           <div className="panel-body stack" style={{ gap: 'var(--s-3)' }}>
-            <strong>Plan ready — your decision</strong>
+            <span className="row" style={{ gap: 'var(--s-2)' }}>
+              <strong>Plan ready — your decision</strong>
+              {active.plan.simulated ? <SimulatedMark label="Composed locally" /> : null}
+            </span>
             <p className="prose">{active.plan.summary}</p>
             {active.plan.decisions.length > 0 ? (
               <div className="stack" style={{ gap: 'var(--s-1)' }}>
@@ -150,7 +153,9 @@ export function MeetingRoom({
                 onClick={() =>
                   startTransition(async () => {
                     const result = await approveMeetingPlan(scopeKey, active.id);
-                    setError(result.ok ? null : (result.error ?? 'Approval failed.'));
+                    // A queued-at-the-gate notice arrives on a successful
+                    // approval too, and the founder must see it.
+                    setError(result.error ?? (result.ok ? null : 'Approval failed.'));
                   })
                 }
               >
