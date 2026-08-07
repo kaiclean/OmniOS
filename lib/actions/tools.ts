@@ -5,7 +5,8 @@ import { revalidatePath } from 'next/cache';
 import type { Scope, ToolCall, ToolOutcome } from '@/lib/domain';
 import { companyScope, makeRecordId, personalScope, requiresApproval, scopeKey, validateArgs } from '@/lib/domain';
 import { getWorkspace, insertRecords, readCollection, updateRecord } from '@/lib/data/store';
-import { resolveTool, runTool } from '@/lib/ai/tools/executors';
+import { resolveTool } from '@/lib/ai/tools/executors';
+import { LOCAL_DECIDER, approveToolCallAs, rejectToolCallAs } from '@/lib/approvals/decide';
 import { proposeCore } from '@/lib/ai/tools/propose';
 import { resolveSecrets } from '@/lib/secrets/vault';
 
@@ -30,13 +31,6 @@ import { resolveSecrets } from '@/lib/secrets/vault';
  * Resolution happens inside the executor, so an approval request can be read
  * safely and the record left behind never contains a credential.
  */
-
-/** The founder is the only actor; recording it makes the audit trail explicit. */
-const ACTOR = 'founder';
-
-function contextFor(scope: Scope, now: Date) {
-  return { scope, now, actor: ACTOR, resolveSecrets };
-}
 
 export interface ProposeResult {
   readonly ok: boolean;
@@ -78,56 +72,21 @@ async function findCall(scope: Scope, toolCallId: string): Promise<ToolCall | un
 }
 
 /**
- * Record the decision, then act on it.
+ * The founder answering in the app.
  *
- * The decision is written to the record before `runTool` is invoked, and the
- * same timestamp is handed to the executor as the approval. If the run then
- * fails, the record still shows that a human said yes — which is the truth, and
- * is what an audit of "who authorised this" needs.
+ * The decider is hardcoded here and is not a parameter, because this function is
+ * callable from the browser: a decider on the wire would let a crafted request
+ * write someone else's name onto a decision. Every entry point fixes its own —
+ * see `lib/approvals/decide.ts`.
  */
 export async function approveToolCall(scope: Scope, toolCallId: string): Promise<ToolOutcome> {
-  const call = await findCall(scope, toolCallId);
-  if (!call) return { ok: false, summary: 'That call is not in this space.', error: 'not-found' };
-  if (call.status !== 'awaiting-approval') {
-    return { ok: false, summary: `That call was already ${call.status}.`, error: 'not-pending' };
-  }
-
-  const now = new Date();
-  const decidedAt = now.toISOString();
-  await updateRecord(scope, 'toolCalls', toolCallId, {
-    status: 'approved',
-    decidedAt,
-    decidedBy: ACTOR,
-  });
-
-  const outcome = await runTool(call.toolId, contextFor(scope, now), call.args, {
-    approval: { decidedBy: ACTOR, decidedAt },
-  });
-
-  await updateRecord(scope, 'toolCalls', toolCallId, {
-    status: outcome.ok ? 'executed' : 'failed',
-    result: outcome.summary,
-    affectedIds: outcome.affectedIds ?? [],
-    ...(outcome.error ? { error: outcome.error } : {}),
-  });
-
+  const outcome = await approveToolCallAs(scope, toolCallId, LOCAL_DECIDER);
   revalidatePath('/', 'layout');
   return outcome;
 }
 
 export async function rejectToolCall(scope: Scope, toolCallId: string): Promise<void> {
-  const call = await findCall(scope, toolCallId);
-  if (!call || call.status !== 'awaiting-approval') return;
-
-  await updateRecord(scope, 'toolCalls', toolCallId, {
-    status: 'rejected',
-    decidedAt: new Date().toISOString(),
-    decidedBy: ACTOR,
-    // Kept, not deleted: a rejected proposal is evidence about what the system
-    // tried to do, and the learning engine reads exactly this to stop suggesting it.
-    result: 'Rejected. Nothing ran.',
-  });
-
+  await rejectToolCallAs(scope, toolCallId, LOCAL_DECIDER);
   revalidatePath('/', 'layout');
 }
 

@@ -6,6 +6,7 @@
  * therefore physical, not just a filter someone might forget to apply.
  */
 
+import { DEFAULT_TELEGRAM_CONFIG } from '@/lib/domain';
 import type {
   AgentRun,
   CustomAgent,
@@ -49,6 +50,7 @@ import type {
   Task,
   Timestamp,
   UpgradeCandidate,
+  TelegramConfig,
 } from '@/lib/domain';
 
 /** Everything stored inside one scope. Every collection is scope-local. */
@@ -255,6 +257,8 @@ export interface WorkspaceRoot {
    * is still recorded in its space, carrying the grant id.
    */
   readonly grants: PermissionGrant[];
+  /** The remote decision channel. Absent on every workspace that predates it. */
+  readonly telegram: TelegramConfig;
 }
 
 export const DEFAULT_SETTINGS: OsSettings = {
@@ -298,5 +302,8 @@ export function normaliseRoot(raw: WorkspaceRoot): WorkspaceRoot {
     mcpServers: raw.mcpServers ?? [],
     mcpStates: raw.mcpStates ?? [],
     grants: raw.grants ?? [],
+    // Spread over the default so a config written before a field existed gains it
+    // rather than arriving half-formed — the root is raw JSON, not a validated type.
+    telegram: { ...DEFAULT_TELEGRAM_CONFIG, ...(raw.telegram ?? {}) },
   };
 }

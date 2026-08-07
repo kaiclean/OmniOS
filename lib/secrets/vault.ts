@@ -23,6 +23,7 @@ import 'server-only';
 import {
   createCipheriv,
   createDecipheriv,
+  createHmac,
   randomBytes,
   timingSafeEqual,
 } from 'node:crypto';
@@ -156,6 +157,23 @@ const meta = (record: EncryptedSecret): SecretMeta => {
 };
 
 /* ------------------------------------------------------------- public ----- */
+
+/**
+ * A purpose-separated subkey derived from the workspace key.
+ *
+ * Exists so a feature that needs to sign something — a Telegram approval button,
+ * say — does not require the founder to configure and store yet another secret,
+ * and does not reuse the encryption key directly for a second job. Two purposes
+ * yield two unrelated keys, so a signing key that leaked could not decrypt the
+ * vault, and the derivation is deterministic so signatures survive a restart.
+ *
+ * Returns key *material*, never a stored secret: nothing here reads or writes
+ * `secrets.json`.
+ */
+export async function deriveSubkey(purpose: string): Promise<string> {
+  const key = await loadKey();
+  return createHmac('sha256', key).update(`omnios:subkey:${purpose}`).digest('base64url');
+}
 
 /** Metadata for every secret. Never includes any part of a value. */
 export async function listSecrets(): Promise<SecretMeta[]> {
