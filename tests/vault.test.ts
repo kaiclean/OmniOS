@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { redact, referencedSecretNames } from '@/lib/domain/secrets';
+import { credentialShape, redact, referencedSecretNames } from '@/lib/domain/secrets';
 
 /**
  * The vault holds the only plaintext in the system, so it is verified rather
@@ -169,5 +169,45 @@ describe('placeholder parsing and redaction', () => {
 
   it('leaves short values alone, because redacting them reveals more than it hides', () => {
     expect(redact('the value is abc here', ['abc'])).toBe('the value is abc here');
+  });
+});
+
+/**
+ * Credentials arriving the wrong way.
+ *
+ * The vault guards the way out. Nothing guarded the way in: a bot token pasted
+ * into the assistant composer — a reasonable thing to do while setting a
+ * connector up — was persisted in plaintext to `messages` and `agentRuns` in a
+ * scope file written 0644, and sent to the configured model. That happened here.
+ * `credentialShape` exists so the turn is refused before any of that.
+ */
+describe('credentials pasted into chat are recognised', () => {
+  it.each([
+    ['Telegram bot token', '8412345678:AAHrandomlookingtokenmaterial_here-9zQ'],
+    ['OpenAI or Anthropic key', 'sk-proj-abcdefghijklmnopqrstuvwxyz0123'],
+    ['Stripe key', 'sk_live_abcdefghij0123456789'],
+    ['GitHub token', 'ghp_abcdefghijklmnopqrstuvwxyz0123456789'],
+    ['Slack token', 'xoxb-1234567890-abcdefghij'],
+    ['AWS access key id', 'AKIAIOSFODNN7EXAMPLE'],
+    ['Google API key', 'AIza' + 'SyA1234567890abcdefghijklmnopqrstuv'],
+    ['private key block', '-----BEGIN OPENSSH PRIVATE KEY-----'],
+  ])('spots a %s', (label, sample) => {
+    expect(credentialShape(`here it is: ${sample} — set it up please`)).toBe(label);
+  });
+
+  /**
+   * The other half, and the harder one. A guard that fires on ordinary sentences
+   * gets talked around rather than trusted, so it recognises vendor-issued
+   * shapes only — never "this looks high-entropy".
+   */
+  it.each([
+    'set up the telegram bot for me',
+    'my meeting is at 14:30 and runs 90 minutes',
+    'the invoice reference is 2026-08-07-0042',
+    'remember that I prefer sk-ii skincare',
+    'ratio was 1234567890:9876543210 across the two quarters',
+    'commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 broke the build',
+  ])('does not fire on %s', (ordinary) => {
+    expect(credentialShape(ordinary)).toBeNull();
   });
 });

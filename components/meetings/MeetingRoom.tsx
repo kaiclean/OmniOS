@@ -11,7 +11,7 @@ import {
   openMeeting,
   speakInMeeting,
 } from '@/lib/actions/meetings';
-import { Badge, Empty } from '@/components/ui/primitives';
+import { Badge, Empty, SimulatedMark } from '@/components/ui/primitives';
 
 /**
  * The room.
@@ -109,7 +109,7 @@ export function MeetingRoom({
               <div className="msg-meta">
                 {nameOf(turn.speakerId)}
                 {turn.addresseeId ? ` → ${nameOf(turn.addresseeId)}` : ''} · {formatRelative(turn.at)}
-                {turn.simulated ? ' · composed locally' : ''}
+                {turn.simulated ? <> · <SimulatedMark label="composed locally" /></> : null}
               </div>
               <div className="msg-body">{turn.text}</div>
             </div>
@@ -120,7 +120,14 @@ export function MeetingRoom({
       {active.stage === 'plan-ready' && active.plan ? (
         <div className="panel">
           <div className="panel-body stack" style={{ gap: 'var(--s-3)' }}>
-            <strong>Plan ready — your decision</strong>
+            <div className="spread">
+              <strong>Plan ready — your decision</strong>
+              {/* The plan is composed, not observed. It was persisted with a
+                  `simulated` flag from the day it shipped and rendered nowhere,
+                  so a locally-written plan looked exactly like a model-written
+                  one at the moment the founder decides whether to execute it. */}
+              {active.plan.simulated ? <SimulatedMark label="composed locally" /> : null}
+            </div>
             <p className="prose">{active.plan.summary}</p>
             {active.plan.decisions.length > 0 ? (
               <div className="stack" style={{ gap: 'var(--s-1)' }}>
