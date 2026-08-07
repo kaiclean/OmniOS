@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 import { handleApprovalCallback } from '@/lib/telegram/approvals';
 
 /**
@@ -23,14 +25,27 @@ import { handleApprovalCallback } from '@/lib/telegram/approvals';
 
 export const dynamic = 'force-dynamic';
 
-const OK = new Response(null, { status: 200 });
+// A fresh Response per request: the fetch spec treats a Response as one-shot,
+// and returning a shared instance from concurrent requests is exactly the kind
+// of works-until-it-doesn't the only unauthenticated route cannot afford.
+const ok = () => new Response(null, { status: 200 });
+
+/** Constant-time, like every other secret comparison in this codebase. */
+function secretMatches(presented: string | null, expected: string): boolean {
+  if (!presented) return false;
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export async function POST(request: Request): Promise<Response> {
   const expected = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
   // Fail closed: with no secret configured the endpoint accepts nothing at all,
   // rather than accepting everything.
-  if (!expected) return OK;
-  if (request.headers.get('x-telegram-bot-api-secret-token') !== expected) return OK;
+  if (!expected) return ok();
+  if (!secretMatches(request.headers.get('x-telegram-bot-api-secret-token'), expected)) {
+    return ok();
+  }
 
   try {
     const update = (await request.json()) as { callback_query?: unknown };
@@ -41,5 +56,5 @@ export async function POST(request: Request): Promise<Response> {
     // A malformed body is noise, not an incident. Nothing was decided.
   }
 
-  return OK;
+  return ok();
 }

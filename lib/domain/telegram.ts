@@ -47,7 +47,13 @@ export function isValidChatId(value: string): boolean {
  * `ACTOR = 'founder'` was true while the app was the only way to answer. A
  * remote channel makes "who authorised this" a real question, so the answer
  * becomes part of the record rather than an assumption baked into a constant.
+ *
+ * The user id matters because the trust unit of the signature is the *chat*: in
+ * a private chat that is one person, but a negative id is a group, and in a
+ * group every member can press the button. Recording who pressed keeps the
+ * audit trail honest about that — and linking a private chat rather than a
+ * group is the configuration that keeps "the founder decided" literally true.
  */
-export function telegramDecider(chatId: string): string {
-  return `telegram:${chatId}`;
+export function telegramDecider(chatId: string, userId?: string): string {
+  return userId && userId !== chatId ? `telegram:${chatId}:user:${userId}` : `telegram:${chatId}`;
 }
