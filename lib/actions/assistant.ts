@@ -53,6 +53,6 @@ export async function loadConversation(targetKey: string): Promise<AssistantMess
 }
 
 export async function providerLabel(): Promise<{ label: string; simulated: boolean }> {
-  const provider = activeProvider();
+  const provider = await activeProvider();
   return { label: provider.label, simulated: provider.simulated };
 }

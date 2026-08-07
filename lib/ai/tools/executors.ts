@@ -27,6 +27,7 @@ import 'server-only';
  */
 
 import type {
+  ApprovalPolicy,
   Automation,
   AutomationStep,
   CalendarBlock,
@@ -73,6 +74,7 @@ import {
   SEVERITIES,
   TASK_STATUSES,
   makeRecordId,
+  parseMcpToolId,
   redact,
   referencedSecretNames,
   requiresApproval,
@@ -81,12 +83,15 @@ import {
 } from '@/lib/domain';
 import type { ScopeData } from '@/lib/data/schema';
 import {
+  getWorkspace,
   insertRecords,
   mutateScope,
   readCollection,
   removeRecord,
   updateRecord,
 } from '@/lib/data/store';
+import { callMcpTool } from '@/lib/mcp/client';
+import { mcpToolDefinition } from './mcp-bridge';
 import { capabilitiesFor, getCapability } from '@/lib/capabilities/registry';
 import { allSecretValues } from '@/lib/secrets/vault';
 import {
@@ -793,7 +798,92 @@ const EXECUTORS: Record<ToolId, ToolExecutor> = {
 };
 
 export function hasExecutor(toolId: string): boolean {
-  return toolId in EXECUTORS;
+  return toolId in EXECUTORS || parseMcpToolId(toolId) !== null;
+}
+
+/* -------------------------------------------------------------- remote ---- */
+
+/**
+ * Resolve a tool id to a definition, including one that lives on a connection.
+ *
+ * Async because a remote tool's shape is not compiled in: it comes from the last
+ * probe of the server that advertises it. Everything downstream — validation,
+ * the smuggling check, the gate, the preview — then treats it exactly like a
+ * built-in, which is the only reason adding MCP did not require a second gate.
+ */
+export async function resolveTool(toolId: string): Promise<ToolDefinition | undefined> {
+  const local = getTool(toolId);
+  if (local) return local;
+
+  const parsed = parseMcpToolId(toolId);
+  if (!parsed) return undefined;
+
+  const workspace = await getWorkspace();
+  const server = workspace.mcpServers.find((candidate) => candidate.id === parsed.serverId);
+  if (!server || !server.enabled) return undefined;
+  if (server.disabledTools.includes(parsed.toolName)) return undefined;
+
+  const state = workspace.mcpStates.find((candidate) => candidate.serverId === parsed.serverId);
+  const descriptor = state?.tools.find((candidate) => candidate.name === parsed.toolName);
+  if (!descriptor) return undefined;
+
+  return mcpToolDefinition(server, descriptor);
+}
+
+/**
+ * Send a validated call to the server that advertised it.
+ *
+ * Placeholders are resolved here and nowhere earlier, so the `ToolCall` that was
+ * already persisted carries `{{secret:NAME}}` while the transport carries the
+ * value — which is invariant 6 in its most literal form.
+ */
+async function executeMcpTool(
+  tool: ToolDefinition,
+  ctx: ToolContext,
+  args: ToolArgs,
+): Promise<ToolOutcome> {
+  const parsed = parseMcpToolId(tool.id);
+  if (!parsed) return refuse(`${tool.label} is not a connection tool.`, 'Malformed remote tool id.');
+
+  const workspace = await getWorkspace();
+  const server = workspace.mcpServers.find((candidate) => candidate.id === parsed.serverId);
+  if (!server) {
+    return refuse(`${tool.label} has no connection.`, `No server called “${parsed.serverId}” is configured.`);
+  }
+
+  const payload: Record<string, unknown> = {};
+  for (const param of tool.params) {
+    const value = args[param.name];
+    if (value === undefined) continue;
+    if (typeof value === 'string') {
+      const resolved = await ctx.resolveSecrets(value);
+      // A `text` param is how a structured argument survives a flat form. If it
+      // parses as JSON the server gets the structure it declared; if it does not,
+      // it gets the string, because guessing would be worse than being literal.
+      if (param.type === 'text') {
+        try {
+          payload[param.name] = JSON.parse(resolved) as unknown;
+          continue;
+        } catch {
+          // Fall through to the string.
+        }
+      }
+      payload[param.name] = resolved;
+      continue;
+    }
+    payload[param.name] = value;
+  }
+
+  const result = await callMcpTool(server, parsed.toolName, payload);
+  if (!result.ok) {
+    return refuse(`${parsed.toolName} on ${server.name} failed.`, result.text || 'The server gave no reason.');
+  }
+
+  return ok(
+    result.text
+      ? `${parsed.toolName} on ${server.name} returned: ${result.text}`
+      : `${parsed.toolName} on ${server.name} completed and returned nothing.`,
+  );
 }
 
 /* ----------------------------------------------------------------- gate --- */
@@ -810,6 +900,17 @@ export interface RunToolOptions {
 }
 
 /**
+ * The founder's own tightening of the gate, read from settings.
+ *
+ * Read here rather than passed in, so no caller can reach `runTool` with a
+ * policy the founder never chose.
+ */
+async function approvalPolicy(): Promise<ApprovalPolicy> {
+  const workspace = await getWorkspace();
+  return { confirmWrites: workspace.settings.confirmWrites };
+}
+
+/**
  * Run a tool.
  *
  * The single entry point, and the only place the approval gate is consulted. It
@@ -823,8 +924,15 @@ export async function runTool(
   raw: Readonly<Record<string, unknown>>,
   options: RunToolOptions = {},
 ): Promise<ToolOutcome> {
-  const tool = getTool(toolId);
-  if (!tool) return refuse(`Unknown tool “${toolId}”.`, 'No tool with that id is declared.');
+  const tool = await resolveTool(toolId);
+  if (!tool) {
+    return refuse(
+      `Unknown tool “${toolId}”.`,
+      parseMcpToolId(toolId)
+        ? 'That connection is missing, switched off, or has not been connected since the tool appeared.'
+        : 'No tool with that id is declared.',
+    );
+  }
 
   const kind = spaceKindOf(ctx);
   if (!kind) {
@@ -853,19 +961,24 @@ export async function runTool(
     );
   }
 
-  if (requiresApproval(tool.risk) && !options.approval) {
+  if (requiresApproval(tool.risk, await approvalPolicy()) && !options.approval) {
     return refuse(
       `${tool.label} is waiting for your decision.`,
       `${tool.label} is ${tool.risk}. It does not run until a human decision is recorded against it.`,
     );
   }
 
-  const executor = EXECUTORS[tool.id as ToolId];
-  if (!executor) return refuse(`${tool.label} has no executor.`, 'No executor is registered for that tool.');
+  const remote = parseMcpToolId(tool.id) !== null;
+  const executor = remote ? undefined : EXECUTORS[tool.id as ToolId];
+  if (!remote && !executor) {
+    return refuse(`${tool.label} has no executor.`, 'No executor is registered for that tool.');
+  }
 
   let outcome: ToolOutcome;
   try {
-    outcome = await executor(ctx, validation.coerced);
+    outcome = remote
+      ? await executeMcpTool(tool, ctx, validation.coerced)
+      : await executor!(ctx, validation.coerced);
   } catch (error) {
     outcome = refuse(
       `${tool.label} failed.`,

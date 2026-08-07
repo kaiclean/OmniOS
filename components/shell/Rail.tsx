@@ -10,10 +10,12 @@ export function Rail({
   spaces,
   openSuggestions,
   upgradesAwaiting,
+  approvalsWaiting,
 }: {
   spaces: readonly SpaceView[];
   openSuggestions: number;
   upgradesAwaiting: number;
+  approvalsWaiting: number;
 }) {
   const companies = spaces.filter((s) => s.kind === 'company');
   const personal = spaces.find((s) => s.kind === 'personal');
@@ -82,10 +84,12 @@ export function Rail({
           <NavLink href="/factory" icon="factory" label="Product Factory" />
           <NavLink href="/finance" icon="coins" label="Finance Center" />
           <NavLink href="/automations" icon="bolt" label="Automations" />
+          <NavLink href="/approvals" icon="shield" label="Approvals" count={approvalsWaiting} />
         </div>
       </div>
 
       <div className="rail-foot">
+        <NavLink href="/connections" icon="plug" label="Connections" />
         <NavLink href="/settings" icon="settings" label="Settings" />
       </div>
     </nav>

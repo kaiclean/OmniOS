@@ -4,7 +4,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
-import { REPORT_CADENCES, companyScope, personalScope, sharedScope } from '@/lib/domain';
+import { CURRENCIES, MCP_AUTONOMY, REPORT_CADENCES, companyScope, personalScope, sharedScope } from '@/lib/domain';
+import { ASSISTANT_TONES } from '@/lib/data/schema';
 import { capabilityIds } from '@/lib/capabilities/registry';
 import { buildEmptyWorkspace } from '@/lib/data/seed';
 import { dropScope, getWorkspace, saveWorkspace, writeScopeData } from '@/lib/data/store';
@@ -26,6 +27,13 @@ const SettingsSchema = z.object({
     .trim()
     .min(1, 'The assistant needs a name.')
     .max(24, 'That name is too long to sit in the sidebar.'),
+  assistantTone: z.enum(ASSISTANT_TONES),
+  currency: z.enum(CURRENCIES),
+  workdayStartHour: z.number().int().min(0).max(23),
+  workdayEndHour: z.number().int().min(1).max(24),
+  defaultMcpAutonomy: z.enum(MCP_AUTONOMY),
+  confirmWrites: z.boolean(),
+  disabledCapabilityIds: z.array(z.string()),
   cadence: z.enum(REPORT_CADENCES),
   includeHealth: z.boolean(),
   includeFinance: z.boolean(),
@@ -35,6 +43,14 @@ const SettingsSchema = z.object({
     .int()
     .min(3, 'A report with fewer than three bullets is a notification.')
     .max(12, 'Past twelve bullets nobody reads the last one.'),
+}).superRefine((value, ctx) => {
+  if (value.workdayEndHour <= value.workdayStartHour) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['workdayEndHour'],
+      message: 'The day has to end after it starts.',
+    });
+  }
 });
 
 export interface SettingsState {
@@ -57,11 +73,29 @@ export async function updateSettings(
   _previous: SettingsState,
   form: FormData,
 ): Promise<SettingsState> {
+  const workspace = await getWorkspace();
+
+  // Capabilities are posted as one checkbox per capability, so "nothing ticked"
+  // and "this form never rendered the section" look identical in the payload. The
+  // marker distinguishes them; without it, a partial post would switch the whole
+  // OS off.
+  const capabilitiesSubmitted = form.get('capabilitiesSubmitted') !== null;
+  const disabledCapabilityIds = capabilitiesSubmitted
+    ? capabilityIds().filter((id) => form.get(`capability:${id}`) === null)
+    : [...workspace.settings.disabledCapabilityIds];
+
   const parsed = SettingsSchema.safeParse({
     theme: readField(form, 'theme'),
     reduceMotion: readToggle(form, 'reduceMotion'),
     spaceTint: readToggle(form, 'spaceTint'),
     assistantName: readField(form, 'assistantName'),
+    assistantTone: readField(form, 'assistantTone'),
+    currency: readField(form, 'currency'),
+    workdayStartHour: Number(readField(form, 'workdayStartHour')),
+    workdayEndHour: Number(readField(form, 'workdayEndHour')),
+    defaultMcpAutonomy: readField(form, 'defaultMcpAutonomy'),
+    confirmWrites: readToggle(form, 'confirmWrites'),
+    disabledCapabilityIds,
     cadence: readField(form, 'cadence'),
     includeHealth: readToggle(form, 'includeHealth'),
     includeFinance: readToggle(form, 'includeFinance'),
@@ -86,6 +120,13 @@ export async function updateSettings(
       reduceMotion: input.reduceMotion,
       spaceTint: input.spaceTint,
       assistantName: input.assistantName,
+      assistantTone: input.assistantTone,
+      currency: input.currency,
+      workdayStartHour: input.workdayStartHour,
+      workdayEndHour: input.workdayEndHour,
+      defaultMcpAutonomy: input.defaultMcpAutonomy,
+      confirmWrites: input.confirmWrites,
+      disabledCapabilityIds: input.disabledCapabilityIds,
       reportSettings: {
         cadence: input.cadence,
         includeHealth: input.includeHealth,

@@ -17,3 +17,4 @@ export * from './tools';
 export * from './secrets';
 export * from './learning';
 export * from './agents';
+export * from './mcp';

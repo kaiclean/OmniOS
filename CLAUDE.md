@@ -32,9 +32,16 @@ These are the product. Breaking one is never a refactor, it is a regression.
      decision is a bug, not a feature.
    - An automation whose steps are `external` refuses to run and records
      `awaiting-approval` instead.
-   - A tool executes only when `requiresApproval(tool.risk)` is false. Ask the
-     function, never hard-code the tier — `destructive` and `external` stop and
-     wait for a recorded decision, and no caller may route around that.
+   - A tool executes only when `requiresApproval(tool.risk, policy)` is false.
+     Ask the function, never hard-code the tier — `destructive` and `external`
+     stop and wait for a recorded decision, and no caller may route around that.
+     `ApprovalPolicy` may only ever *tighten*; adding a field to it that lets a
+     gated tier run itself is the one change this file forbids outright.
+
+   The gate has two halves and both are load-bearing. `runTool` refuses;
+   `lib/actions/tools.ts` is where a decision gets written down, *before* the
+   call runs. A path that executes a gated call without first persisting who
+   decided and when is a regression even if the founder did click the button.
 3. **Absence is an em dash.** A missing value renders `EMPTY`, never `0`. If a
    derived number lacks its inputs, return `null` and say so in the UI.
 4. **Generation is deterministic.** Seed from a stable id via `createRng`.
@@ -63,6 +70,16 @@ These are the product. Breaking one is never a refactor, it is a regression.
   browser: resolve it through its scope.
 - **A persistence backend** → implement `WorkspaceStore` and change the one line
   in `lib/data/store.ts`. Nothing above it should need to change.
+- **A field on the workspace root** → add it to `WorkspaceRoot`, give it a
+  default in `normaliseRoot`, and add it to both roots in `lib/data/seed.ts`.
+  The root is read as raw JSON, so a field without a default arrives `undefined`
+  on every workspace that predates it, whatever the type says.
+- **An outward capability** → never a bespoke integration. It arrives as an MCP
+  server the founder connects, is bridged to a `ToolDefinition` by
+  `lib/ai/tools/mcp-bridge.ts`, and inherits the gate for free.
+- **A launch step** → one entry in `lib/business/playbook.ts`. Internal steps
+  name a built-in tool and must validate against it; `tests/launch.test.ts`
+  enforces both. Outward steps name what they need and never hard-wire a tool.
 
 ## Design rules
 

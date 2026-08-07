@@ -16,7 +16,7 @@ import 'server-only';
 import { fileSystemStore } from './adapters/fs-store';
 import type { WorkspaceStore } from './store-port';
 import type { CollectionName, ScopeData, WorkspaceRoot } from './schema';
-import { emptyScopeData } from './schema';
+import { emptyScopeData, normaliseRoot } from './schema';
 import type { Scope } from '@/lib/domain';
 import { scopeKey } from '@/lib/domain';
 import { buildInitialWorkspace } from './seed';
@@ -36,7 +36,7 @@ let seeding: Promise<WorkspaceRoot> | null = null;
 
 export async function getWorkspace(): Promise<WorkspaceRoot> {
   const existing = await adapter.readRoot();
-  if (existing) return existing;
+  if (existing) return normaliseRoot(existing);
   if (!seeding) {
     seeding = (async () => {
       const again = await adapter.readRoot();

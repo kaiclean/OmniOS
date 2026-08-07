@@ -194,6 +194,9 @@ export interface LlmProvider {
   readonly id: string;
   readonly label: string;
   readonly simulated: boolean;
-  available(): boolean;
+  /** The secret this provider looks for by name, or null if it needs none. */
+  readonly keyName: string | null;
+  /** Async because a key may live in the vault, which is on disk and encrypted. */
+  available(): Promise<boolean>;
   complete(request: LlmRequest): Promise<LlmResponse>;
 }
