@@ -16,3 +16,9 @@ npm-debug.log*
 
 # Local OmniOS workspace state (the founder's real data never enters git)
 .omnios-data/
+
+# Belt and braces. The line above already covers these, but someone will one day
+# want to commit a sample workspace and un-ignore that directory — and on that
+# day the encryption key and the vault must still be uncommittable.
+**/.secret-key
+**/secrets.json
