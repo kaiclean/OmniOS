@@ -14,7 +14,7 @@ import 'server-only';
  */
 
 import type { LlmProvider, LlmToolSchema, Scope, ToolDefinition } from '@/lib/domain';
-import { scoreTools } from './tools';
+import { scoreTools, toolsForScope } from './tools';
 
 export interface PlannedCall {
   readonly toolId: string;
@@ -135,10 +135,30 @@ export async function detectAct(
 
   // The shortlist keeps the request small and the model honest: it can only
   // pick from tools that already looked plausible for this sentence and scope.
-  const shortlist = scoreTools(prompt, scope ?? undefined, preferCapabilityId ? { preferCapabilityId } : {})
-    .slice(0, 12)
-    .map((entry) => entry.tool);
-  if (shortlist.length === 0) return { mode: 'answer', calls: [] };
+  //
+  // With one deliberate exception. Every `read` tool is always offered, whatever
+  // the sentence scored, because the ability to *find something out* must not
+  // depend on the founder phrasing their question the way the keyword matcher
+  // expects. Without this the scorer became a veto on the model's judgement:
+  // "is the auditor tracked?" matched nothing, so the model was never asked, and
+  // the assistant answered from whatever happened to be pre-loaded rather than
+  // looking. A read changes nothing, so offering it costs nothing.
+  const available = scope ? toolsForScope(scope) : [];
+  if (available.length === 0) return { mode: 'answer', calls: [] };
+
+  const rank = new Map(
+    scoreTools(prompt, scope ?? undefined, preferCapabilityId ? { preferCapabilityId } : {}).map(
+      (entry, index) => [entry.tool.id, index],
+    ),
+  );
+  // Ordered by score, but never truncated. Scoring is a good hint and a bad
+  // filter: a model asked to plan "…and if not add it" needs `create_task` in
+  // front of it, and no keyword in that clause surfaces it. Verified against the
+  // live model with the full set — thirty schemas plan correctly, so the only
+  // thing truncation bought was the assistant being unable to do things.
+  const shortlist = [...available].sort(
+    (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+  );
 
   try {
     const response = await provider.completeWithTools(

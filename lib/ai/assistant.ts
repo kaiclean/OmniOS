@@ -24,8 +24,10 @@ import { rosterFor } from './roster';
 import { compose } from './compose';
 import { activeProvider } from './providers';
 import { learnFromInteraction } from '@/lib/learning/engine';
-import { detectAct } from './act';
-import { proposeCore } from './tools/propose';
+import { describeLoop, runActLoop } from './loop';
+import { describeSelf } from './self';
+import { toolsForScope } from './tools';
+import { NOT_WIRED_TOOL_IDS } from './tools/executors';
 
 /**
  * Assemble the context a target is allowed to see.
@@ -88,7 +90,7 @@ export async function loadContext(target: AssistantTarget, now = new Date()): Pr
   };
 }
 
-function systemPrompt(tone: AssistantTone, locationLine: string | null): string {
+function systemPrompt(tone: AssistantTone, locationLine: string | null, self: string): string {
   return [
     `You are the Executive Assistant inside OmniOS, an operating system a founder runs their companies and their private life from.`,
     '',
@@ -100,6 +102,8 @@ function systemPrompt(tone: AssistantTone, locationLine: string | null): string 
     ...(locationLine ? ['', locationLine] : []),
     '',
     `Keep any figures exactly as given.`,
+    '',
+    self,
   ].join('\n');
 }
 
@@ -155,23 +159,13 @@ export async function ask(
 
   const actLines: string[] = [];
   if (actScope && actScope.kind !== 'shared') {
-    const decision = await detectAct(prompt, {
+    const loop = await runActLoop(prompt, {
       scope: actScope,
       provider,
       now,
       ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
     });
-    if (decision.note) actLines.push(decision.note);
-    for (const planned of decision.calls) {
-      const outcome = await proposeCore(actScope, planned.toolId, planned.args, { now });
-      if (outcome.awaitingApproval) {
-        actLines.push(`Queued for your approval: ${outcome.preview} Decide it under Approvals.`);
-      } else if (outcome.ok) {
-        actLines.push(`Done: ${outcome.summary}`);
-      } else {
-        actLines.push(`Could not ${outcome.toolLabel.toLowerCase()}: ${outcome.summary}`);
-      }
-    }
+    actLines.push(...describeLoop(loop));
   }
 
   const plan = buildDelegationPlan({
@@ -194,7 +188,19 @@ export async function ask(
         messages: [
           {
             role: 'system',
-            content: systemPrompt(workspace.settings.assistantTone, locationLineFor(target, ctx)),
+            content: systemPrompt(
+              workspace.settings.assistantTone,
+              locationLineFor(target, ctx),
+              // Rides on every turn. Without it the assistant reasons about its
+              // own abilities from priors about assistants in general, which is
+              // how it ends up telling the founder to ask somebody else.
+              describeSelf({
+                tools: actScope && actScope.kind !== 'shared' ? toolsForScope(actScope) : [],
+                servers: workspace.mcpServers,
+                states: workspace.mcpStates,
+                unwiredToolIds: NOT_WIRED_TOOL_IDS,
+              }),
+            ),
           },
           {
             role: 'user',
