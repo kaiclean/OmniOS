@@ -92,3 +92,46 @@ export function redact(text: string, values: readonly string[]): string {
   }
   return out;
 }
+
+/* ------------------------------------------------- credentials in the open -- */
+
+/**
+ * Credential shapes, recognised so they can be refused before they are stored.
+ *
+ * The vault guards the way *out*: a value goes in encrypted and is resolved only
+ * inside the executor that needs it. Nothing guarded the way *in*. A founder who
+ * pasted a bot token into the assistant composer — a reasonable thing to do when
+ * setting one up — put it in plaintext into `messages` and `agentRuns`, in a
+ * scope file written 0644, and sent it to whichever model was configured. That
+ * happened, and it is why this exists.
+ *
+ * Deliberately narrow. Every entry is a vendor-issued prefix or a fixed
+ * structure, never "looks high-entropy": a false positive here refuses a turn
+ * the founder meant, and an assistant that argues with you about your own words
+ * gets talked around rather than trusted.
+ */
+const CREDENTIAL_SHAPES: ReadonlyArray<{ readonly label: string; readonly re: RegExp }> = [
+  // 123456789:AAH... — the pattern is unmistakable and the token is total control of the bot.
+  { label: 'Telegram bot token', re: /\b\d{8,12}:[A-Za-z0-9_-]{30,}\b/ },
+  { label: 'OpenAI or Anthropic key', re: /\bsk-[A-Za-z0-9][A-Za-z0-9_-]{18,}\b/ },
+  { label: 'Stripe key', re: /\b[ps]k_(?:live|test)_[A-Za-z0-9]{16,}\b/ },
+  { label: 'GitHub token', re: /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/ },
+  { label: 'Slack token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/ },
+  { label: 'AWS access key id', re: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/ },
+  { label: 'Google API key', re: /\bAIza[A-Za-z0-9_-]{35}\b/ },
+  { label: 'private key block', re: /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/ },
+];
+
+/**
+ * What this text appears to carry, or null.
+ *
+ * Returns the label rather than a boolean so the refusal can name the thing —
+ * "that looks like a Telegram bot token" is actionable, "that looks like a
+ * secret" invites the founder to try again with the same paste.
+ */
+export function credentialShape(text: string): string | null {
+  for (const shape of CREDENTIAL_SHAPES) {
+    if (shape.re.test(text)) return shape.label;
+  }
+  return null;
+}

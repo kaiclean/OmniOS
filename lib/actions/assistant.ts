@@ -9,6 +9,7 @@ import { ask, conversation } from '@/lib/ai/assistant';
 import { activeProvider } from '@/lib/ai/providers';
 import { getCapability } from '@/lib/capabilities/registry';
 import { derivePageContext } from '@/lib/ui/page-context';
+import { credentialShape } from '@/lib/domain';
 
 export interface AssistantTurn {
   readonly ok: boolean;
@@ -51,6 +52,20 @@ export async function askAssistant(
   if (!trimmed) return { ok: false, error: 'Say something first.' };
   if (trimmed.length > 4000) {
     return { ok: false, error: 'That is longer than the assistant accepts in one turn.' };
+  }
+
+  // Refused here, before `ask()` — which is the only place it can be refused
+  // usefully. One turn later the text is already in `messages` and `agentRuns`
+  // on disk, and already sent to whichever model is configured; deleting the
+  // record afterwards does not un-send it. The vault guards secrets on the way
+  // out and nothing guarded the way in, so a token pasted into the composer
+  // while setting a connector up landed in plaintext in a scope file.
+  const credential = credentialShape(trimmed);
+  if (credential) {
+    return {
+      ok: false,
+      error: `That looks like it contains a ${credential}, so I have not stored or sent it. Put it in the vault instead — Connections → Keys and secrets — and refer to it here by name. If it was a real credential, treat it as exposed and rotate it.`,
+    };
   }
 
   try {

@@ -318,6 +318,85 @@ openAiProvider.completeWithTools = async (request, tools) => {
   );
 };
 
+/**
+ * Anthropic's tool API, which is not OpenAI-shaped.
+ *
+ * Its absence was silent and total. Anthropic is first in the registry and the
+ * product tells the founder Claude is "preferred automatically when present", so
+ * the default configuration reached `detectAct`, found no `completeWithTools`,
+ * and fell to the keyword matcher — which ranks against the *static registry
+ * only*. Every bridged connection tool became unplannable, and the multi-round
+ * loop had nothing to plan with. "Read my notes file" with a filesystem server
+ * connected returned nothing at all, because `read` is not an imperative hint.
+ *
+ * Two wire differences from the OpenAI shape, both of which silently produce
+ * zero calls if missed: tools carry `input_schema` rather than `parameters`, and
+ * a call arrives as a `tool_use` content block whose `input` is already an
+ * object — not a JSON string needing a parse.
+ */
+anthropicProvider.completeWithTools = async (request, tools): Promise<LlmToolResponse> => {
+  const key = await apiKey(ANTHROPIC_KEY);
+  if (!key) throw new Error(`completeWithTools called without ${ANTHROPIC_KEY}`);
+
+  const system = request.messages
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n\n');
+  const messages = request.messages
+    .filter((m) => m.role !== 'system')
+    .map((m) => ({ role: m.role, content: m.content }));
+
+  const response = await fetch(ANTHROPIC_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: process.env.OMNIOS_ASSISTANT_MODEL || 'claude-opus-4-5',
+      max_tokens: request.maxTokens ?? 1400,
+      ...(system ? { system } : {}),
+      messages,
+      tools: tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.parameters,
+      })),
+      tool_choice: { type: 'auto' },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Anthropic tool request failed: ${response.status} ${response.statusText}`);
+  }
+
+  const payload = (await response.json()) as {
+    content?: Array<{ type: string; text?: string; name?: string; input?: unknown }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
+  const blocks = payload.content ?? [];
+
+  const calls: LlmToolCall[] = [];
+  for (const block of blocks) {
+    if (block.type !== 'tool_use' || !block.name) continue;
+    calls.push({
+      name: block.name,
+      args: block.input && typeof block.input === 'object' ? (block.input as Record<string, unknown>) : {},
+    });
+  }
+
+  return {
+    text: blocks
+      .filter((block) => block.type === 'text')
+      .map((block) => block.text ?? '')
+      .join(''),
+    calls,
+    ...(payload.usage?.input_tokens === undefined ? {} : { tokensIn: payload.usage.input_tokens }),
+    ...(payload.usage?.output_tokens === undefined ? {} : { tokensOut: payload.usage.output_tokens }),
+  };
+};
+
 const REGISTRY: readonly LlmProvider[] = [
   anthropicProvider,
   openAiProvider,
