@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { McpServerConfig, McpToolDescriptor, RiskTier } from '@/lib/domain';
-import { RISK_TIERS, mcpToolId, parseMcpToolId, requiresApproval, riskForMcpTool } from '@/lib/domain';
+import { RISK_TIERS, mcpToolId, parseMcpToolId, requiresApproval, riskForMcpTool, MCP_PRESETS} from '@/lib/domain';
 import { mcpToolDefinition, mcpToolDefinitions, paramsFromSchema } from '@/lib/ai/tools/mcp-bridge';
 
 /**
@@ -293,4 +293,58 @@ describe('tool identifiers', () => {
     expect(parseMcpToolId('mcp:')).toBeNull();
     expect(parseMcpToolId('mcp:srv:')).toBeNull();
   });
+});
+
+/**
+ * Preset commands have to be real.
+ *
+ * `@modelcontextprotocol/server-fetch` shipped in the preset list and does not
+ * exist — the npm registry returns 404 for it, and always has. Web fetch is the
+ * connection most often recommended as the easy first one, so the failure landed
+ * on precisely the founder least equipped to work out why. A preset that names
+ * an uninstallable package is worse than no preset: it looks like a supported
+ * path and dead-ends.
+ *
+ * The offline half runs always. The network half runs when asked, because a test
+ * that reaches the npm registry has no business failing a build over someone
+ * else's outage.
+ */
+describe('preset commands are installable', () => {
+  it('runs each stdio preset through a launcher the founder can be told to install', () => {
+    const launchers = new Set(['npx', 'uvx', 'docker']);
+    for (const preset of MCP_PRESETS) {
+      if (preset.transport !== 'stdio') continue;
+      expect(launchers, preset.id).toContain(preset.command);
+      expect(preset.args?.length ?? 0, `${preset.id} names no package`).toBeGreaterThan(0);
+    }
+  });
+
+  it('names a package on the right registry for its launcher', () => {
+    for (const preset of MCP_PRESETS) {
+      if (preset.transport !== 'stdio') continue;
+      const pkg = (preset.args ?? []).find((arg) => !arg.startsWith('-') && !arg.startsWith('<'));
+      expect(pkg, `${preset.id} names no package`).toBeTruthy();
+      // npm packages are scoped or bare names; uvx packages are PyPI names. What
+      // matters is that one of them is identifiable at all.
+      expect(pkg, preset.id).toMatch(/^[@a-z0-9][\w@/.-]*$/i);
+    }
+  });
+
+  it.runIf(process.env.OMNIOS_CHECK_REGISTRIES === '1')(
+    'every named package actually resolves',
+    async () => {
+      for (const preset of MCP_PRESETS) {
+        if (preset.transport !== 'stdio') continue;
+        const pkg = (preset.args ?? []).find((arg) => !arg.startsWith('-') && !arg.startsWith('<'));
+        if (!pkg) continue;
+        const url =
+          preset.command === 'uvx'
+            ? `https://pypi.org/pypi/${pkg}/json`
+            : `https://registry.npmjs.org/${encodeURIComponent(pkg)}`;
+        const response = await fetch(url);
+        expect(response.ok, `${preset.id} → ${pkg} (${response.status})`).toBe(true);
+      }
+    },
+    120_000,
+  );
 });

@@ -45,7 +45,35 @@ async function resolveRecord(
  * variables a Node process genuinely needs to run. Passing the whole ambient
  * environment would hand every third-party server every key on the machine.
  */
-const INHERITED_ENV = ['PATH', 'HOME', 'SHELL', 'TMPDIR', 'LANG', 'USER', 'NODE_EXTRA_CA_CERTS'];
+/**
+ * What a spawned server inherits from this process, and nothing else.
+ *
+ * The cache variables at the end are not an afterthought — without them the
+ * whole preset list is unusable on a machine whose package caches are anywhere
+ * but the default. Every stdio preset launches through `npx` or `uvx`, and both
+ * fail outright if they cannot reach their cache: `npx` dies with ENOTDIR before
+ * the server ever starts, which surfaces as "Connection closed" and looks like a
+ * broken server rather than a broken environment. That failure is invisible from
+ * inside OmniOS and cost this workspace every connection it never made.
+ *
+ * They are safe to pass because they are locations, not credentials. A path
+ * cannot authenticate anything, and a server that reads one learns only where
+ * packages are cached. Anything that *could* carry a secret stays out, and
+ * travels instead through `config.env` as an explicit `{{secret:NAME}}`.
+ */
+const INHERITED_ENV = [
+  'PATH',
+  'HOME',
+  'SHELL',
+  'TMPDIR',
+  'LANG',
+  'USER',
+  'NODE_EXTRA_CA_CERTS',
+  'npm_config_cache',
+  'NPM_CONFIG_CACHE',
+  'UV_CACHE_DIR',
+  'XDG_CACHE_HOME',
+];
 
 function baseEnv(): Record<string, string> {
   const out: Record<string, string> = {};
