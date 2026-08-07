@@ -20,7 +20,7 @@ import 'server-only';
  * Adding a provider means adding one object here. Nothing above this file changes.
  */
 
-import type { LlmProvider, LlmRequest, LlmResponse } from '@/lib/domain';
+import type { LlmProvider, LlmRequest, LlmResponse, LlmToolCall, LlmToolResponse, LlmToolSchema } from '@/lib/domain';
 import { revealSecret } from '@/lib/secrets/vault';
 
 /**
@@ -214,6 +214,90 @@ export const ollamaProvider: LlmProvider = {
         : { tokensOut: payload.usage.completion_tokens }),
     };
   },
+};
+
+/**
+ * OpenAI-shaped function calling, shared by every provider that speaks it.
+ * The model plans; nothing here executes.
+ */
+async function openAiStyleToolCall(
+  endpoint: string,
+  key: string,
+  model: string,
+  request: LlmRequest,
+  tools: readonly LlmToolSchema[],
+): Promise<LlmToolResponse> {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+    body: JSON.stringify({
+      model,
+      max_tokens: request.maxTokens ?? 1400,
+      messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
+      tools: tools.map((tool) => ({
+        type: 'function',
+        function: { name: tool.name, description: tool.description, parameters: tool.parameters },
+      })),
+    }),
+  });
+  if (!response.ok) throw new Error(`Tool-call request failed: ${response.status} ${response.statusText}`);
+
+  const payload = (await response.json()) as {
+    choices?: Array<{
+      message?: {
+        content?: string | null;
+        tool_calls?: Array<{ function?: { name?: string; arguments?: string } }>;
+      };
+    }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  const message = payload.choices?.[0]?.message;
+
+  const calls: LlmToolCall[] = (message?.tool_calls ?? []).flatMap((entry) => {
+    const name = entry.function?.name;
+    if (!name) return [];
+    try {
+      const args = JSON.parse(entry.function?.arguments || '{}') as Record<string, unknown>;
+      return [{ name, args }];
+    } catch {
+      // A model that returns unparseable arguments has planned nothing usable;
+      // dropping the call is the honest reading of it.
+      return [];
+    }
+  });
+
+  return {
+    text: message?.content ?? '',
+    calls,
+    ...(payload.usage?.prompt_tokens === undefined ? {} : { tokensIn: payload.usage.prompt_tokens }),
+    ...(payload.usage?.completion_tokens === undefined
+      ? {}
+      : { tokensOut: payload.usage.completion_tokens }),
+  };
+}
+
+ollamaProvider.completeWithTools = async (request, tools) => {
+  const key = await apiKey(OLLAMA_KEY);
+  if (!key) throw new Error(`completeWithTools called without ${OLLAMA_KEY}`);
+  return openAiStyleToolCall(
+    OLLAMA_ENDPOINT,
+    key,
+    process.env.OMNIOS_OLLAMA_MODEL || 'qwen3.5:397b',
+    request,
+    tools,
+  );
+};
+
+openAiProvider.completeWithTools = async (request, tools) => {
+  const key = await apiKey(OPENAI_KEY);
+  if (!key) throw new Error(`completeWithTools called without ${OPENAI_KEY}`);
+  return openAiStyleToolCall(
+    OPENAI_ENDPOINT,
+    key,
+    process.env.OMNIOS_OPENAI_MODEL || 'gpt-4.1',
+    request,
+    tools,
+  );
 };
 
 const REGISTRY: readonly LlmProvider[] = [

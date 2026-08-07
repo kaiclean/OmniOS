@@ -190,6 +190,25 @@ export interface LlmResponse {
  * V1 ships {@link SimulatedProvider}. Setting `ANTHROPIC_API_KEY` swaps in a real
  * one without any caller changing — the router, specialists and UI are unaware.
  */
+/** A tool offered to a model, in the JSON-Schema shape function-calling expects. */
+export interface LlmToolSchema {
+  readonly name: string;
+  readonly description: string;
+  readonly parameters: Readonly<Record<string, unknown>>;
+}
+
+export interface LlmToolCall {
+  readonly name: string;
+  readonly args: Readonly<Record<string, unknown>>;
+}
+
+export interface LlmToolResponse {
+  readonly text: string;
+  readonly calls: readonly LlmToolCall[];
+  readonly tokensIn?: number;
+  readonly tokensOut?: number;
+}
+
 export interface LlmProvider {
   readonly id: string;
   readonly label: string;
@@ -199,4 +218,11 @@ export interface LlmProvider {
   /** Async because a key may live in the vault, which is on disk and encrypted. */
   available(): Promise<boolean>;
   complete(request: LlmRequest): Promise<LlmResponse>;
+  /**
+   * Function-calling, where the provider supports it. The model may only ever
+   * *plan* a call — everything it returns goes through validation and the
+   * approval gate exactly like typed input, which is why this method is safe
+   * to offer at all.
+   */
+  completeWithTools?(request: LlmRequest, tools: readonly LlmToolSchema[]): Promise<LlmToolResponse>;
 }
