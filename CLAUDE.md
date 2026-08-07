@@ -26,10 +26,15 @@ These are the product. Breaking one is never a refactor, it is a regression.
 1. **Scope isolation is structural.** Every store read names a scope. There is no
    `readEverything()` and there must never be one. Cross-space aggregation lives
    only in `lib/data/aggregate.ts`; **nothing under `lib/ai/` may import it.**
-2. **Nothing applies itself.** `UpgradeCandidate.stage` may reach
-   `awaiting-approval` autonomously and no further. Anything that could write
-   `applied`, or run an automation whose steps are `external`, without a recorded
-   human decision is a bug, not a feature.
+2. **Nothing applies itself.** Three gates, one rule.
+   - `UpgradeCandidate.stage` may reach `awaiting-approval` autonomously and no
+     further. Anything that could write `applied` without a recorded human
+     decision is a bug, not a feature.
+   - An automation whose steps are `external` refuses to run and records
+     `awaiting-approval` instead.
+   - A tool executes only when `requiresApproval(tool.risk)` is false. Ask the
+     function, never hard-code the tier — `destructive` and `external` stop and
+     wait for a recorded decision, and no caller may route around that.
 3. **Absence is an em dash.** A missing value renders `EMPTY`, never `0`. If a
    derived number lacks its inputs, return `null` and say so in the UI.
 4. **Generation is deterministic.** Seed from a stable id via `createRng`.
@@ -37,6 +42,10 @@ These are the product. Breaking one is never a refactor, it is a regression.
    they break tests and silently reshuffle the founder's workspace on reload.
 5. **Generated is labelled.** Anything OmniOS produced rather than observed
    carries `simulated: true` / `generated: true` and shows `<SimulatedMark />`.
+6. **Secret plaintext has one way in and one way out.** It never reaches a
+   `ToolCall`, a memory record, agent context, a page prop or a log. Only
+   `resolveSecrets()` inside an executor may hold it, and only for the duration
+   of the call. The vault's threat model is stated in the UI, not implied.
 
 ## Adding things
 
