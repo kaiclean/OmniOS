@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { CURRENCIES, MCP_AUTONOMY, REPORT_CADENCES, companyScope, personalScope, sharedScope } from '@/lib/domain';
 import { ASSISTANT_TONES } from '@/lib/data/schema';
 import { capabilityIds } from '@/lib/capabilities/registry';
+import { providerCatalogue } from '@/lib/ai/providers';
 import { buildEmptyWorkspace } from '@/lib/data/seed';
 import { dropScope, getWorkspace, saveWorkspace, writeScopeData } from '@/lib/data/store';
 
@@ -28,6 +29,13 @@ const SettingsSchema = z.object({
     .min(1, 'The assistant needs a name.')
     .max(24, 'That name is too long to sit in the sidebar.'),
   assistantTone: z.enum(ASSISTANT_TONES),
+  // Validated against the live registry rather than a hardcoded union, so adding
+  // a provider stays a one-object change in `lib/ai/providers.ts`.
+  assistantProvider: z
+    .string()
+    .refine((id) => id === 'auto' || providerCatalogue().some((p) => p.id === id), {
+      message: 'That is not a provider OmniOS knows about.',
+    }),
   currency: z.enum(CURRENCIES),
   workdayStartHour: z.number().int().min(0).max(23),
   workdayEndHour: z.number().int().min(1).max(24),
@@ -90,6 +98,7 @@ export async function updateSettings(
     spaceTint: readToggle(form, 'spaceTint'),
     assistantName: readField(form, 'assistantName'),
     assistantTone: readField(form, 'assistantTone'),
+    assistantProvider: readField(form, 'assistantProvider'),
     currency: readField(form, 'currency'),
     workdayStartHour: Number(readField(form, 'workdayStartHour')),
     workdayEndHour: Number(readField(form, 'workdayEndHour')),
@@ -121,6 +130,7 @@ export async function updateSettings(
       spaceTint: input.spaceTint,
       assistantName: input.assistantName,
       assistantTone: input.assistantTone,
+      assistantProvider: input.assistantProvider,
       currency: input.currency,
       workdayStartHour: input.workdayStartHour,
       workdayEndHour: input.workdayEndHour,

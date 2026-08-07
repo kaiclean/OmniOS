@@ -32,6 +32,25 @@ describe('the secret vault', () => {
     expect(await vault.revealSecret('STRIPE_KEY')).toBe('sk_live_abcdef123456');
   });
 
+  /**
+   * `revealSecret` bumps `lastUsedAt`, so a read is a write. Without a write
+   * queue, two concurrent reads raced on one `secrets.json.<pid>.tmp`: whichever
+   * renamed first won, the other threw ENOENT, and `apiKey()` swallowed it into
+   * "no API key configured" on a workspace that had one. Sequential reads never
+   * reproduce it — the concurrency is the test.
+   */
+  it('survives concurrent reads, which are concurrent writes', async () => {
+    await vault.putSecret({ name: 'RACE_KEY', value: 'race-value-123456', kind: 'api-key' });
+
+    const reads = await Promise.all(
+      Array.from({ length: 12 }, () => vault.revealSecret('RACE_KEY')),
+    );
+    expect(reads).toEqual(Array.from({ length: 12 }, () => 'race-value-123456'));
+
+    expect(await vault.revealSecret('RACE_KEY')).toBe('race-value-123456');
+    expect((await vault.listSecrets()).some((entry) => entry.name === 'RACE_KEY')).toBe(true);
+  });
+
   it('never writes the plaintext to disk', async () => {
     await vault.putSecret({ name: 'PLAIN_CHECK', value: 'super-secret-value-9876', kind: 'token' });
     const onDisk = await readFile(join(dir, 'secrets.json'), 'utf8');

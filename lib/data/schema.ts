@@ -182,6 +182,16 @@ export interface OsSettings {
   readonly assistantName: string;
   /** How the assistant writes. Affects wording only — never which facts it uses. */
   readonly assistantTone: AssistantTone;
+  /**
+   * Which brain the assistant thinks with.
+   *
+   * `'auto'` keeps first-available-wins. Naming a provider pins it, which is the
+   * only way to choose a *specific* model when several keys are in the vault —
+   * registry order is a sensible default but it is not a preference, and a
+   * founder who put an Ollama key in because they want that model should not be
+   * silently handed a different one.
+   */
+  readonly assistantProvider: string;
   /** Money is stored in minor units; this decides the default it is rendered in. */
   readonly currency: CurrencyCode;
   /** Local hours the founder wants work scheduled into. */
@@ -253,6 +263,7 @@ export const DEFAULT_SETTINGS: OsSettings = {
   spaceTint: true,
   assistantName: 'Atlas',
   assistantTone: 'direct',
+  assistantProvider: 'auto',
   currency: 'CHF',
   workdayStartHour: 9,
   workdayEndHour: 18,

@@ -165,6 +165,22 @@ export const openAiProvider: LlmProvider = {
 
 const OLLAMA_ENDPOINT = 'https://ollama.com/v1/chat/completions';
 const OLLAMA_KEY = 'OLLAMA_API_KEY';
+const OLLAMA_MODEL = 'glm-5.2:cloud';
+
+/**
+ * A floor on output tokens, and it is not arbitrary.
+ *
+ * GLM-5.2 is a reasoning model: it spends output tokens thinking before it emits
+ * any content. Measured against the live endpoint — a 200-token budget returned
+ * `finish_reason: length` with **zero characters** of content, having consumed
+ * all 200. `ask()` reads empty text as "the provider gave nothing" and falls
+ * back to the local composition, so the symptom is not an error. It is a
+ * correctly configured key quietly producing replies marked "generated locally".
+ *
+ * The floor is per-provider rather than global because it is a property of the
+ * model, not of the caller's intent.
+ */
+const OLLAMA_MIN_OUTPUT_TOKENS = 2048;
 
 /**
  * Ollama Cloud, through its OpenAI-compatible endpoint.
@@ -188,8 +204,8 @@ export const ollamaProvider: LlmProvider = {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: process.env.OMNIOS_OLLAMA_MODEL || 'qwen3.5:397b',
-        max_tokens: request.maxTokens ?? 1400,
+        model: process.env.OMNIOS_OLLAMA_MODEL || OLLAMA_MODEL,
+        max_tokens: Math.max(request.maxTokens ?? 1400, OLLAMA_MIN_OUTPUT_TOKENS),
         ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
         messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
       }),
@@ -282,8 +298,10 @@ ollamaProvider.completeWithTools = async (request, tools) => {
   return openAiStyleToolCall(
     OLLAMA_ENDPOINT,
     key,
-    process.env.OMNIOS_OLLAMA_MODEL || 'qwen3.5:397b',
-    request,
+    process.env.OMNIOS_OLLAMA_MODEL || OLLAMA_MODEL,
+    // Same floor as `complete`: a reasoning model starved of output tokens plans
+    // nothing and returns nothing, which reads as "the model declined to act".
+    { ...request, maxTokens: Math.max(request.maxTokens ?? 1400, OLLAMA_MIN_OUTPUT_TOKENS) },
     tools,
   );
 };
@@ -309,10 +327,37 @@ const REGISTRY: readonly LlmProvider[] = [
 
 /** The first available provider. The simulated one is always last and always available. */
 export async function activeProvider(): Promise<LlmProvider> {
+  const pinned = await pinnedProviderId();
+  if (pinned && pinned !== 'auto') {
+    const chosen = REGISTRY.find((provider) => provider.id === pinned);
+    // A pin that names a provider with no key falls back to the simulator rather
+    // than to a *different* real provider. Silently answering with a brain the
+    // founder did not choose is worse than plainly answering locally.
+    if (chosen) return (await chosen.available()) ? chosen : simulatedProvider;
+  }
+
   for (const provider of REGISTRY) {
     if (await provider.available()) return provider;
   }
   return simulatedProvider;
+}
+
+/**
+ * The founder's choice, from settings, then the environment.
+ *
+ * Read lazily and defensively: `activeProvider` runs on every turn and on the
+ * shell render, and a workspace that cannot be read must degrade to
+ * first-available rather than throw.
+ */
+async function pinnedProviderId(): Promise<string | null> {
+  const fromEnv = process.env.OMNIOS_ASSISTANT_PROVIDER?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    const { getWorkspace } = await import('@/lib/data/store');
+    return (await getWorkspace()).settings.assistantProvider ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export interface ProviderInfo {

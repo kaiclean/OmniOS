@@ -46,10 +46,13 @@ const CADENCE_LABELS: Readonly<Record<(typeof REPORT_CADENCES)[number], string>>
 export function SettingsForm({
   settings,
   capabilities,
+  providers,
 }: {
   settings: OsSettings;
   /** Passed in rather than imported: the registry is the server's to read. */
   capabilities: ReadonlyArray<{ id: string; label: string }>;
+  /** Names and key-presence only — never a key, and never a decrypted value. */
+  providers: ReadonlyArray<{ id: string; label: string; available: boolean }>;
 }) {
   const [state, action, pending] = useActionState(updateSettings, INITIAL);
 
@@ -143,6 +146,32 @@ export function SettingsForm({
         <span className="hint">
           Wording only. The analysis underneath is computed from your records the same way whichever
           you pick, so no tone can make a figure softer than it is.
+        </span>
+      </div>
+
+      <div className="field">
+        <label className="label" htmlFor="assistantProvider">
+          Which brain it thinks with
+        </label>
+        <select
+          className="select"
+          id="assistantProvider"
+          name="assistantProvider"
+          defaultValue={settings.assistantProvider}
+        >
+          <option value="auto">Automatic — first one with a key</option>
+          {providers.map((provider) => (
+            <option key={provider.id} value={provider.id}>
+              {provider.label}
+              {provider.available ? '' : ' — no key stored'}
+            </option>
+          ))}
+        </select>
+        <span className="hint">
+          Automatic takes whichever provider has a key, in a fixed order. Pin one when you want a
+          specific model — with several keys in the vault, order is a default, not your preference.
+          A pinned provider with no key falls back to local reasoning rather than to a different
+          model, so an answer never arrives from a brain you did not choose.
         </span>
       </div>
 
