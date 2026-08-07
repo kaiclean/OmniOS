@@ -44,9 +44,21 @@ export default async function LifeOverviewPage() {
         title={personal.displayName}
         lede={personal.dna.identity}
         actions={
-          <Link className="btn btn--secondary" href="/life/dna">
-            Personal DNA
-          </Link>
+          <>
+            {/* A company space offers Team and Team Room from its header; the
+                personal space offered neither, so its Council and roster were
+                reachable only from the command palette or by typing the URL. A
+                surface nobody can find is a surface that does not exist. */}
+            <Link className="btn btn--secondary" href="/life/team">
+              Team
+            </Link>
+            <Link className="btn btn--secondary" href="/life/room">
+              Council
+            </Link>
+            <Link className="btn btn--secondary" href="/life/dna">
+              Personal DNA
+            </Link>
+          </>
         }
       />
 

@@ -212,7 +212,17 @@ export async function ask(
               // what the planning half can reach, or it disclaims abilities the
               // loop just used.
               describeSelf({
-                tools: actScope && actScope.kind !== 'shared' ? await availableTools(actScope) : [],
+                // Founder mode has no single acting scope, but it is not
+                // powerless — it is the surface where "what can you do?" is most
+                // often asked. Handing it `[]` made the assistant state with
+                // total confidence that it had no tools and no connections,
+                // which is the failure `self.ts` exists to prevent, inverted:
+                // a confident falsehood instead of an honest hedge. Describe the
+                // personal scope's toolset, which is every founder-mode space's
+                // built-ins plus the same connections.
+                tools: await availableTools(
+                  actScope && actScope.kind !== 'shared' ? actScope : personalScope(),
+                ),
                 servers: workspace.mcpServers,
                 states: workspace.mcpStates,
                 unwiredToolIds: NOT_WIRED_TOOL_IDS,
