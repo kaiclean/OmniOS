@@ -4,10 +4,12 @@ import Link from 'next/link';
 
 import { CAPABILITIES, getCapability } from '@/lib/capabilities/registry';
 import { loadSpaces, type SpaceView } from '@/lib/data/aggregate';
-import { readScope } from '@/lib/data/store';
+import { getWorkspace, readScope } from '@/lib/data/store';
 import type { MemoryRecord, PromotionVerdict, Scope, SpecialistDomain } from '@/lib/domain';
 import { SPECIALIST_DOMAINS, canRead, promotionCheck, sharedScope } from '@/lib/domain';
 import { SPECIALISTS } from '@/lib/ai/specialists';
+import { buildBrainGraph } from '@/lib/brain/graph';
+import { BrainGraphView } from '@/components/brain/BrainGraph';
 import { EMPTY, formatNumber, formatPercent, formatRelative, pluralise, titleCase } from '@/lib/format';
 import {
   Badge,
@@ -38,7 +40,11 @@ export const metadata: Metadata = { title: 'Brain' };
  * describing a boundary the system does not actually hold.
  */
 export default async function BrainPage() {
-  const spaces = await loadSpaces();
+  const [spaces, graph, { settings }] = await Promise.all([
+    loadSpaces(),
+    buildBrainGraph(),
+    getWorkspace(),
+  ]);
 
   const shared = await Promise.all(
     CAPABILITIES.map(async (capability) => ({
@@ -92,6 +98,18 @@ export default async function BrainPage() {
         lede="Everything OmniOS has remembered, in the three regions it keeps them in. A company's memory is readable only inside that company; your life's memory is readable only inside your life; and one thin shared layer holds the lessons that survived being stripped of who they were about."
         actions={<Badge tone="outline">{pluralise(scoped.length + sharedRecords.length, 'record')}</Badge>}
       />
+
+      <div className="grid" style={{ marginBottom: 'var(--s-8)' }}>
+        <Panel
+          span={12}
+          flush
+          title="The living graph"
+          subtitle="Every neuron is a real record; every filament a relationship that exists in the store. It grows while you watch."
+          footer="Clusters take each space's hue — the one screen where the room's tint touches content, because here the hue is the data. Shared memory is the tissue between clusters."
+        >
+          <BrainGraphView initial={graph} reduceMotion={settings.reduceMotion} />
+        </Panel>
+      </div>
 
       <section className="panel" style={{ marginBottom: 'var(--s-8)' }}>
         <div className="panel-body">
