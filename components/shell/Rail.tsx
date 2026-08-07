@@ -32,6 +32,8 @@ export function Rail({
       <div className="rail-scroll">
         <div className="rail-group">
           <NavLink href="/" icon="home" label="Home" count={openSuggestions} exact />
+          <NavLink href="/mission-control" icon="pulse" label="Mission Control" />
+          <NavLink href="/timeline" icon="clock" label="Timeline" />
           <NavLink href="/brain" icon="brain" label="Brain" />
           <NavLink href="/assistant" icon="assistant" label="Assistant" />
         </div>

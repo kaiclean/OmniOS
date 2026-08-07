@@ -30,6 +30,8 @@ export interface ProposeOutcome {
   readonly awaitingApproval: boolean;
   readonly toolCallId: string;
   readonly summary: string;
+  /** Records the call created or changed — how a caller links to what it made. */
+  readonly affectedIds?: readonly string[];
   /** The preview persisted on the call — what an approval decides about. */
   readonly preview: string;
   readonly toolLabel: string;
@@ -133,6 +135,7 @@ export async function proposeCore(
       awaitingApproval: false,
       toolCallId: id,
       summary: `${outcome.summary} — ran under your standing grant (“${grant.note}”).`,
+      ...(outcome.affectedIds ? { affectedIds: outcome.affectedIds } : {}),
       preview,
       toolLabel: tool.label,
       risk: tool.risk,
@@ -142,10 +145,10 @@ export async function proposeCore(
   if (gated) {
     const call: ToolCall = { ...base, status: 'awaiting-approval' };
     await insertRecords(scope, 'toolCalls', [call]);
-    // Second door onto the same inbox. Deliberately after the record is written
-    // and deliberately unawaited-for-failure: a Telegram outage must not stop a
-    // call being queued, because the approvals page is the source of truth and
-    // this is only a way to be told about it sooner.
+    // Second door onto the same inbox, after the record is written. Awaited,
+    // but bounded and soft: the client times out at five seconds and never
+    // throws, so a Telegram outage delays a queued call by seconds at most and
+    // can never stop it — the approvals page is the source of truth.
     await notifyPendingCall(call, spaceLabelFor(scope, workspace));
     return {
       ok: true,
@@ -172,6 +175,7 @@ export async function proposeCore(
     awaitingApproval: false,
     toolCallId: id,
     summary: outcome.summary,
+    ...(outcome.affectedIds ? { affectedIds: outcome.affectedIds } : {}),
     preview,
     toolLabel: tool.label,
     risk: tool.risk,

@@ -51,6 +51,10 @@ async function call(method: string, body: Record<string, unknown>): Promise<Tele
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
+      // Bounded, because proposeCore awaits the notification: a hung Telegram
+      // connection must delay a queued call by seconds, never stall it. Failure
+      // stays soft — the approvals page is the source of truth either way.
+      signal: AbortSignal.timeout(5_000),
     });
     const payload = (await response.json()) as {
       ok?: boolean;

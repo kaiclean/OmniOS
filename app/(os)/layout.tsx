@@ -77,6 +77,8 @@ function buildCommands(
 ): Command[] {
   const commands: Command[] = [
     { id: 'home', label: 'Home', group: 'OS', href: '/', icon: 'home', keywords: 'overview today' },
+    { id: 'mission-control', label: 'Mission Control', group: 'OS', href: '/mission-control', icon: 'pulse', keywords: 'live activity pending decisions running' },
+    { id: 'timeline', label: 'Timeline', group: 'OS', href: '/timeline', icon: 'clock', keywords: 'history audit trail events log' },
     { id: 'brain', label: 'Brain — memory & intelligence', group: 'OS', href: '/brain', icon: 'brain', keywords: 'memory learned' },
     { id: 'assistant', label: 'Assistant', group: 'OS', href: '/assistant', icon: 'assistant', keywords: 'chat ai copilot' },
     { id: 'companies', label: 'All companies', group: 'OS', href: '/companies', icon: 'building' },
@@ -118,6 +120,14 @@ function buildCommands(
       href: `/companies/${company.id}/dna`,
       icon: 'diamond',
     });
+    commands.push({
+      id: `space:${company.id}:team`,
+      label: `${company.name} · Team`,
+      group: 'Company',
+      href: `/companies/${company.id}/team`,
+      icon: 'users',
+      keywords: 'agents roster hire specialists',
+    });
     for (const capability of capabilitiesFor('company')) {
       commands.push({
         id: `space:${company.id}:${capability.id}`,
@@ -135,6 +145,14 @@ function buildCommands(
     group: 'Life',
     href: '/life/dna',
     icon: 'diamond',
+  });
+  commands.push({
+    id: 'life:team',
+    label: `${personalName} · Team`,
+    group: 'Life',
+    href: '/life/team',
+    icon: 'users',
+    keywords: 'agents roster hire coach',
   });
   for (const capability of capabilitiesFor('personal')) {
     commands.push({

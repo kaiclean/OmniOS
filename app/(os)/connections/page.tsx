@@ -5,7 +5,45 @@ import { mcpToolDefinitions } from '@/lib/ai/tools/mcp-bridge';
 import { readVaultView } from '@/lib/actions/secrets';
 import { CAPABILITIES } from '@/lib/capabilities/registry';
 import { getWorkspace } from '@/lib/data/store';
-import { referencedSecretNames, requiresApproval } from '@/lib/domain';
+import type { CatalogEntry, ConnectorState } from '@/lib/domain';
+import {
+  CONNECTOR_CATALOG,
+  CONNECTOR_CATEGORIES,
+  CONNECTOR_CATEGORY_LABELS,
+  CONNECTOR_STATE_LABELS,
+  referencedSecretNames,
+  requiresApproval,
+} from '@/lib/domain';
+import type { WorkspaceRoot } from '@/lib/data/schema';
+
+/**
+ * A catalog card's state is derived from what is actually configured, never
+ * asserted. AI entries check the provider registry; everything else checks the
+ * connections themselves — a server whose last probe failed shows as failing.
+ */
+function catalogState(
+  entry: CatalogEntry,
+  workspace: WorkspaceRoot,
+  providers: ReadonlyArray<{ id: string; available: boolean }>,
+): ConnectorState {
+  if (entry.category === 'ai' && !entry.presetId) {
+    const providerId =
+      entry.id === 'ollama-cloud' ? 'ollama' : entry.id === 'anthropic' ? 'anthropic' : 'openai';
+    return providers.find((p) => p.id === providerId)?.available ? 'connected' : 'needs-server';
+  }
+  const server = entry.presetId
+    ? workspace.mcpServers.find(
+        (candidate) => candidate.id === entry.presetId || candidate.id.startsWith(`${entry.presetId}-`),
+      )
+    : undefined;
+  if (server) {
+    const state = workspace.mcpStates.find((candidate) => candidate.serverId === server.id);
+    if (state?.status === 'connected') return 'connected';
+    if (state?.status === 'error' || server.lastError) return 'error';
+    return 'configured';
+  }
+  return entry.presetId ? 'one-click' : 'needs-server';
+}
 import { EMPTY, formatNumber, pluralise } from '@/lib/format';
 import {
   Badge,
@@ -157,6 +195,43 @@ export default async function ConnectionsPage() {
           ))}
         </div>
       )}
+
+      <SectionHead title="What OmniOS can reach" />
+      <Note icon="panel">
+        A map, not an inventory: every service below arrives the same way — as an MCP server on
+        this page, through the same gate. Entries with a preset connect in one click; the rest say
+        honestly what they need. Nothing here can look connected when it is not.
+      </Note>
+      <div className="grid" style={{ marginTop: 'var(--s-5)' }}>
+        {CONNECTOR_CATEGORIES.map((category) => {
+          const entries = CONNECTOR_CATALOG.filter((entry) => entry.category === category);
+          return (
+            <Panel key={category} span={6} flush title={CONNECTOR_CATEGORY_LABELS[category]}>
+              <div className="list">
+                {entries.map((entry) => {
+                  const state = catalogState(entry, workspace, providers);
+                  return (
+                    <div key={entry.id} className="list-row">
+                      <div className="grow">
+                        <div className="row wrap" style={{ gap: 'var(--s-2)' }}>
+                          <span className="list-primary">{entry.name}</span>
+                          <Badge tone={state === 'connected' ? 'accent' : state === 'error' ? 'warn' : 'outline'}>
+                            {CONNECTOR_STATE_LABELS[state]}
+                          </Badge>
+                        </div>
+                        <div className="list-secondary">
+                          {entry.unlocks}{' '}
+                          {state === 'needs-server' || state === 'one-click' ? entry.how : ''}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Panel>
+          );
+        })}
+      </div>
 
       <SectionHead title="Start from a preset" />
       <div className="grid">

@@ -11,10 +11,19 @@ import 'server-only';
  * something has gone wrong.
  */
 
-import type { Company, CurrencyCode, Scope, Suggestion, Task } from '@/lib/domain';
+import type {
+  Company,
+  CurrencyCode,
+  PermissionGrant,
+  Scope,
+  Suggestion,
+  Task,
+  Timestamp,
+  UpgradeCandidate,
+} from '@/lib/domain';
 import { companyScope, personalScope } from '@/lib/domain';
 import { energyOf } from '@/lib/personal/energy';
-import type { ScopeData } from './schema';
+import type { ScopeData, WorkspaceRoot } from './schema';
 import { getWorkspace, readScope } from './store';
 
 export interface SpaceView {
@@ -160,4 +169,367 @@ export function acrossSpaces<K extends keyof ScopeData>(
   collection: K,
 ): Array<{ item: ScopeData[K][number]; space: SpaceView }> {
   return spaces.flatMap((space) => space.data[collection].map((item) => ({ item, space })));
+}
+
+/* ---------------------------------------------------------- timeline ------ */
+
+/* ------------------------------------------------------ setup progress ---- */
+
+export interface SetupStep {
+  readonly id: string;
+  readonly label: string;
+  readonly detail: string;
+  readonly done: boolean;
+  readonly href: string;
+}
+
+export interface SetupProgress {
+  readonly steps: readonly SetupStep[];
+  readonly done: number;
+  readonly total: number;
+  readonly complete: boolean;
+}
+
+/**
+ * Zero to hero, derived — never stored, so it can neither nag about something
+ * already done nor congratulate something undone. Each step is a real state of
+ * the workspace, checked from the records themselves.
+ */
+export function setupProgress(
+  spaces: readonly SpaceView[],
+  workspace: Pick<WorkspaceRoot, 'companies' | 'telegram' | 'mcpStates' | 'grants'>,
+  flags: { readonly hasRealProvider: boolean },
+): SetupProgress {
+  const firstCompany = workspace.companies.find((company) => !company.archivedAt);
+  const roomHref = firstCompany ? `/companies/${firstCompany.id}/room` : '/life/room';
+  const teamHref = firstCompany ? `/companies/${firstCompany.id}/team` : '/life/team';
+
+  const steps: SetupStep[] = [
+    {
+      id: 'brain',
+      label: 'Give it a brain',
+      detail: 'Put a model key in the vault so the assistant thinks with a real model, not the local simulator.',
+      done: flags.hasRealProvider,
+      href: '/connections',
+    },
+    {
+      id: 'company',
+      label: 'Create your first company',
+      detail: 'A space of your own, beyond the sample workspaces.',
+      done: workspace.companies.some((company) => !company.generated && !company.archivedAt),
+      href: '/companies/new',
+    },
+    {
+      id: 'meeting',
+      label: 'Hold a meeting',
+      detail: 'Put a real question to the room and watch the specialists argue from your records.',
+      done: spaces.some((space) => space.data.meetings.length > 0),
+      href: roomHref,
+    },
+    {
+      id: 'decision',
+      label: 'Decide something at the gate',
+      detail: 'Approve or reject a queued call. The gate is the product — feel it hold.',
+      done: spaces.some((space) => space.data.toolCalls.some((call) => call.decidedBy !== undefined)),
+      href: '/approvals',
+    },
+    {
+      id: 'agent',
+      label: 'Hire an agent',
+      detail: 'Grow one space’s roster with a preset or an agent you invent.',
+      done: spaces.some((space) => space.data.customAgents.length > 0),
+      href: teamHref,
+    },
+    {
+      id: 'telegram',
+      label: 'Approve from your phone',
+      detail: 'Connect Telegram so gated calls reach you wherever you are.',
+      done: workspace.telegram.enabled,
+      href: '/connections',
+    },
+    {
+      id: 'connection',
+      label: 'Reach outside',
+      detail: 'Connect an MCP server and the assistant gains its tools — behind the same gate.',
+      done: workspace.mcpStates.some((state) => state.status === 'connected'),
+      href: '/connections',
+    },
+    {
+      id: 'grant',
+      label: 'Record trust in advance',
+      detail: 'Give one recurring external call a standing grant — narrow, expiring, revocable.',
+      done: workspace.grants.length > 0,
+      href: '/approvals',
+    },
+  ];
+
+  const done = steps.filter((step) => step.done).length;
+  return { steps, done, total: steps.length, complete: done === steps.length };
+}
+
+export const TIMELINE_KINDS = [
+  'action',
+  'decision',
+  'meeting',
+  'automation',
+  'assistant',
+  'upgrade',
+  'grant',
+] as const;
+export type TimelineKind = (typeof TIMELINE_KINDS)[number];
+
+export const TIMELINE_KIND_LABELS: Record<TimelineKind, string> = {
+  action: 'Actions',
+  decision: 'Decisions',
+  meeting: 'Meetings',
+  automation: 'Automations',
+  assistant: 'Assistant',
+  upgrade: 'Upgrades',
+  grant: 'Grants',
+};
+
+export interface TimelineEvent {
+  readonly id: string;
+  readonly at: Timestamp;
+  readonly kind: TimelineKind;
+  readonly title: string;
+  readonly detail?: string;
+  readonly spaceLabel: string;
+  readonly spaceKey: string;
+  readonly href: string;
+  readonly tone: 'ok' | 'warn' | 'pending' | 'neutral';
+  readonly simulated?: boolean;
+  /**
+   * A call that only looked at something. The full timeline keeps these — an
+   * audit trail that hides reads is not an audit trail — but a digest view may
+   * fold them away so one lookup-heavy turn cannot drown the day's changes.
+   */
+  readonly readOnly?: boolean;
+}
+
+export interface TimelineFilter {
+  readonly kinds?: readonly TimelineKind[];
+  readonly spaceKey?: string;
+  readonly limit?: number;
+}
+
+/**
+ * The audit trail, derived — never stored.
+ *
+ * Every event here is a projection of a record that already exists (a ToolCall,
+ * a Meeting, a run, a grant), so the timeline can never disagree with the
+ * workspace and there is no second history to keep honest. Root-level events
+ * (grants, upgrades) carry the space key `os`: they belong to the founder's OS,
+ * not to any one space.
+ */
+export function buildTimeline(
+  spaces: readonly SpaceView[],
+  root: {
+    readonly grants: readonly PermissionGrant[];
+    readonly upgrades: readonly UpgradeCandidate[];
+  },
+  filter: TimelineFilter = {},
+): TimelineEvent[] {
+  const events: TimelineEvent[] = [];
+
+  for (const space of spaces) {
+    const { scopeKey: key, label, href, data } = space;
+
+    for (const call of data.toolCalls) {
+      const pending = call.status === 'awaiting-approval';
+      events.push({
+        id: `call:${call.id}`,
+        at: call.at,
+        kind: 'action',
+        title: call.preview,
+        detail: pending
+          ? `Waiting for your decision · ${call.risk}`
+          : call.status === 'failed'
+            ? (call.error ?? 'Failed.')
+            : call.grantId
+              ? `${call.result ?? 'Ran.'} · under a standing grant`
+              : (call.result ?? call.status),
+        spaceLabel: label,
+        spaceKey: key,
+        href: pending ? '/approvals' : href,
+        tone:
+          pending ? 'pending'
+          : call.status === 'failed' ? 'warn'
+          : call.status === 'rejected' || call.status === 'skipped' ? 'neutral'
+          : 'ok',
+        ...(call.risk === 'read' ? { readOnly: true } : {}),
+      });
+      // A per-call decision is its own moment. A grant-covered call is not: its
+      // decision happened when the grant was made, and the grant events say so.
+      if (call.decidedAt && call.decidedBy && !call.grantId) {
+        events.push({
+          id: `decision:${call.id}`,
+          at: call.decidedAt,
+          kind: 'decision',
+          title: `${call.status === 'rejected' ? 'Rejected' : 'Approved'} — ${call.preview}`,
+          detail: `Decided by ${call.decidedBy}`,
+          spaceLabel: label,
+          spaceKey: key,
+          href: '/approvals',
+          tone: call.status === 'rejected' ? 'neutral' : 'ok',
+        });
+      }
+    }
+
+    const roomHref = space.kind === 'company' ? `${href}/room` : '/life/room';
+    for (const meeting of data.meetings) {
+      events.push({
+        id: `meeting:${meeting.id}`,
+        at: meeting.createdAt,
+        kind: 'meeting',
+        title: `Meeting opened — “${meeting.topic}”`,
+        detail: `${meeting.participantIds.length} specialists in the room`,
+        spaceLabel: label,
+        spaceKey: key,
+        href: roomHref,
+        tone: meeting.stage === 'plan-ready' ? 'pending' : 'neutral',
+      });
+      if (meeting.approvedAt && meeting.plan) {
+        events.push({
+          id: `meeting-approved:${meeting.id}`,
+          at: meeting.approvedAt,
+          kind: 'decision',
+          title: `Plan approved — “${meeting.topic}”`,
+          detail: `${meeting.plan.tasks.length} tasks created through the gate`,
+          spaceLabel: label,
+          spaceKey: key,
+          href: roomHref,
+          tone: 'ok',
+        });
+      }
+      if (meeting.closedAt) {
+        events.push({
+          id: `meeting-closed:${meeting.id}`,
+          at: meeting.closedAt,
+          kind: 'meeting',
+          title: `Meeting closed — “${meeting.topic}”`,
+          spaceLabel: label,
+          spaceKey: key,
+          href: roomHref,
+          tone: 'neutral',
+        });
+      }
+    }
+
+    for (const run of data.automationRuns) {
+      const automation = data.automations.find((a) => a.id === run.automationId);
+      events.push({
+        id: `automation:${run.id}`,
+        at: run.startedAt,
+        kind: 'automation',
+        title: `Automation ran — ${automation?.name ?? run.automationId}`,
+        detail:
+          run.status === 'awaiting-approval'
+            ? 'Stopped at the gate · waiting for you'
+            : run.minutesSaved > 0
+              ? `${run.status} · saved ~${run.minutesSaved} min`
+              : run.status,
+        spaceLabel: label,
+        spaceKey: key,
+        href: '/automations',
+        tone:
+          run.status === 'success' ? 'ok'
+          : run.status === 'awaiting-approval' ? 'pending'
+          : 'warn',
+        ...(run.simulated ? { simulated: true } : {}),
+      });
+    }
+
+    for (const run of data.agentRuns) {
+      events.push({
+        id: `agent:${run.id}`,
+        at: run.startedAt,
+        kind: 'assistant',
+        title: `Assistant — “${run.prompt.length > 90 ? `${run.prompt.slice(0, 90)}…` : run.prompt}”`,
+        detail: `${run.plan.steps.length > 0 ? `${run.plan.steps.length} specialists · ` : ''}${run.providerId}`,
+        spaceLabel: label,
+        spaceKey: key,
+        href: '/assistant',
+        tone: 'neutral',
+        ...(run.simulated ? { simulated: true } : {}),
+      });
+    }
+  }
+
+  for (const grant of root.grants) {
+    events.push({
+      id: `grant:${grant.id}`,
+      at: grant.createdAt,
+      kind: 'grant',
+      title: `Standing grant — ${grant.note}`,
+      detail: `${grant.serverId} · ${grant.toolName} · ${grant.scopeKey}`,
+      spaceLabel: 'OmniOS',
+      spaceKey: 'os',
+      href: '/approvals',
+      tone: 'ok',
+    });
+    if (grant.revokedAt) {
+      events.push({
+        id: `grant-revoked:${grant.id}`,
+        at: grant.revokedAt,
+        kind: 'grant',
+        title: `Grant revoked — ${grant.note}`,
+        detail: 'Calls under it stop immediately; the record stays',
+        spaceLabel: 'OmniOS',
+        spaceKey: 'os',
+        href: '/approvals',
+        tone: 'warn',
+      });
+    }
+  }
+
+  for (const upgrade of root.upgrades) {
+    events.push({
+      id: `upgrade:${upgrade.id}`,
+      at: upgrade.createdAt,
+      kind: 'upgrade',
+      title: `Upgrade proposed — ${upgrade.title}`,
+      detail: upgrade.whatChanged,
+      spaceLabel: 'OmniOS',
+      spaceKey: 'os',
+      href: '/intelligence/upgrades',
+      tone: upgrade.stage === 'awaiting-approval' ? 'pending' : 'neutral',
+      ...(upgrade.simulated ? { simulated: true } : {}),
+    });
+    if (upgrade.decision) {
+      events.push({
+        id: `upgrade-decided:${upgrade.id}`,
+        at: upgrade.decision.decidedAt,
+        kind: 'decision',
+        title: `Upgrade ${upgrade.decision.decision === 'approve' ? 'approved' : upgrade.decision.decision === 'reject' ? 'rejected' : 'sent back to testing'} — ${upgrade.title}`,
+        detail: `Decided by ${upgrade.decision.decidedBy}`,
+        spaceLabel: 'OmniOS',
+        spaceKey: 'os',
+        href: '/intelligence/upgrades',
+        tone: upgrade.decision.decision === 'approve' ? 'ok' : 'neutral',
+      });
+    }
+    if (upgrade.appliedAt) {
+      events.push({
+        id: `upgrade-applied:${upgrade.id}`,
+        at: upgrade.appliedAt,
+        kind: 'upgrade',
+        title: `Upgrade applied — ${upgrade.title}`,
+        spaceLabel: 'OmniOS',
+        spaceKey: 'os',
+        href: '/intelligence/upgrades',
+        tone: 'ok',
+      });
+    }
+  }
+
+  const kinds = filter.kinds;
+  const wanted = events.filter(
+    (event) =>
+      (!kinds || kinds.length === 0 || kinds.includes(event.kind)) &&
+      (!filter.spaceKey || event.spaceKey === filter.spaceKey),
+  );
+  // Newest first; the id tie-break keeps the order stable when timestamps collide.
+  wanted.sort((a, b) => (a.at === b.at ? (a.id < b.id ? 1 : -1) : a.at < b.at ? 1 : -1));
+  return wanted.slice(0, filter.limit ?? 200);
 }

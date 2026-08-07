@@ -103,6 +103,13 @@ export interface AssistantMessage extends ScopedRecord {
   /** True when produced by the local simulator rather than a real model. */
   readonly simulated: boolean;
   readonly providerId: string;
+  /**
+   * Which conversation this message belongs to. Absent = the main assistant
+   * thread (every message written before this field existed). `agent:<id>` is a
+   * direct conversation with one roster member, kept in the same scope but never
+   * mixed into the assistant's history.
+   */
+  readonly channel?: string;
 }
 
 export interface AgentRun extends ScopedRecord {

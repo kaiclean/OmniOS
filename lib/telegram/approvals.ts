@@ -62,6 +62,8 @@ export async function notifyPendingCall(call: ToolCall, spaceLabel: string): Pro
 interface CallbackQuery {
   readonly id?: string;
   readonly data?: string;
+  /** Who pressed the button. In a group this is not necessarily the founder. */
+  readonly from?: { readonly id?: number | string };
   readonly message?: { readonly message_id?: number; readonly chat?: { readonly id?: number | string } };
 }
 
@@ -94,7 +96,12 @@ export async function handleApprovalCallback(query: CallbackQuery): Promise<void
   const found = await locateCall(verified.toolCallId);
   if (!found) return;
 
-  const decider = telegramDecider(incomingChat);
+  // The signature binds the button to the chat; in a group, any member can
+  // press it. Recording who pressed keeps the audit trail honest about that.
+  const decider = telegramDecider(
+    incomingChat,
+    query.from?.id === undefined ? undefined : String(query.from.id),
+  );
   const outcome =
     verified.decision === 'approve'
       ? (await approveToolCallAs(found.scope, verified.toolCallId, decider)).summary
