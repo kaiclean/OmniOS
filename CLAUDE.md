@@ -42,6 +42,14 @@ These are the product. Breaking one is never a refactor, it is a regression.
    `lib/actions/tools.ts` is where a decision gets written down, *before* the
    call runs. A path that executes a gated call without first persisting who
    decided and when is a regression even if the founder did click the button.
+
+   A `PermissionGrant` is that same decision recorded in advance — exact
+   (server, tool, scope) triple, optionally expiring, revocable, and every call
+   under it names it by `grantId`. Grants reach only `mcp:*` tools;
+   `parseMcpToolId` refusing built-in ids is what keeps `destructive` per-call
+   forever, and `tests/grants.test.ts` pins it. Widening grant matching, adding
+   a server wildcard, or letting a grant cover a built-in tool are security
+   design changes, not refactors.
 3. **Absence is an em dash.** A missing value renders `EMPTY`, never `0`. If a
    derived number lacks its inputs, return `null` and say so in the UI.
 4. **Generation is deterministic.** Seed from a stable id via `createRng`.

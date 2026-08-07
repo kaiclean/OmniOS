@@ -153,6 +153,7 @@ export function buildInitialWorkspace(now: Date = new Date()): InitialWorkspace 
     reports,
     mcpServers: [],
     mcpStates: [],
+    grants: [],
   };
 
   return { root, scopes };
@@ -172,6 +173,7 @@ export function buildEmptyWorkspace(displayName = 'Kai', now: Date = new Date())
     reports: [],
     mcpServers: [],
     mcpStates: [],
+    grants: [],
   };
   return { root, scopes: [[personalScope(), emptyScopeData()] as const] };
 }
