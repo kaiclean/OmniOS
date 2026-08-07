@@ -114,6 +114,8 @@ export interface ToolCall extends ScopedRecord {
   readonly decidedBy?: string;
   /** The run that produced this call, when it came from the assistant. */
   readonly runId?: string;
+  /** The standing grant that let this call run without a per-call decision. */
+  readonly grantId?: string;
 }
 
 export interface ToolOutcome {

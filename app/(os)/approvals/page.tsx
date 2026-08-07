@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 
+import { listGrants } from '@/lib/actions/grants';
 import { pendingApprovals, recentDecisions } from '@/lib/actions/tools';
+import { GrantRow } from '@/components/approvals/GrantRow';
 import { EMPTY, formatNumber, formatRelative, pluralise } from '@/lib/format';
 import {
   Badge,
@@ -29,7 +31,12 @@ export const metadata: Metadata = { title: 'Approvals' };
  * this is the founder's own inbox, assembled for their own question.
  */
 export default async function ApprovalsPage() {
-  const [pending, decided] = await Promise.all([pendingApprovals(), recentDecisions()]);
+  const [pending, decided, grants] = await Promise.all([
+    pendingApprovals(),
+    recentDecisions(),
+    listGrants(),
+  ]);
+  const activeGrants = grants.filter((entry) => entry.active).length;
 
   const external = pending.filter((entry) => entry.call.risk === 'external').length;
   const destructive = pending.filter((entry) => entry.call.risk === 'destructive').length;
@@ -119,6 +126,38 @@ export default async function ApprovalsPage() {
           <Link href="/connections">Connections</Link>.
         </Note>
       ) : null}
+
+      <SectionHead
+        title="Standing grants"
+        action={<Badge tone={activeGrants > 0 ? 'warn' : 'outline'}>{pluralise(activeGrants, 'active grant')}</Badge>}
+      />
+      <div className="grid">
+        <Panel
+          span={12}
+          flush
+          footer="A grant is your approval recorded in advance: one tool, one connection, one space, optionally until a date. Calls made under it stay in the record naming it. Deleting or resetting inside OmniOS can never be granted — those are decided per call, always."
+        >
+          {grants.length === 0 ? (
+            <Empty title="Nothing runs without asking">
+              Every external call waits for you. When one keeps coming back and you trust it, approve
+              it with “allow for a week” and its exact shape gains a standing grant you can revoke
+              here.
+            </Empty>
+          ) : (
+            <div className="list">
+              {grants.map((entry) => (
+                <GrantRow
+                  key={entry.grant.id}
+                  grant={entry.grant}
+                  active={entry.active}
+                  serverName={entry.serverName}
+                  spaceLabel={entry.spaceLabel}
+                />
+              ))}
+            </div>
+          )}
+        </Panel>
+      </div>
 
       <SectionHead title="Recently decided" />
       <div className="grid">

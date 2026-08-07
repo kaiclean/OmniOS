@@ -3,9 +3,10 @@
 import { useState, useTransition } from 'react';
 
 import type { Scope, ToolCall } from '@/lib/domain';
-import { RISK_EXPLANATION } from '@/lib/domain';
+import { RISK_EXPLANATION, parseMcpToolId } from '@/lib/domain';
 import { formatRelative } from '@/lib/format';
 import { approveToolCall, rejectToolCall } from '@/lib/actions/tools';
+import { approveAndAlwaysAllow } from '@/lib/actions/grants';
 import { Badge } from '@/components/ui/primitives';
 
 /**
@@ -92,6 +93,28 @@ export function ApprovalRow({
         >
           Reject
         </button>
+        {parseMcpToolId(call.toolId) ? (
+          // Only a connection tool can carry a standing grant. The one-week cap
+          // here is deliberate: "always, forever" is a decision for the grants
+          // panel with the revoke button in view, not a reflex on a queue row.
+          <button
+            className="btn btn--secondary"
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(async () => {
+                const result = await approveAndAlwaysAllow(call.scope as Scope, call.id, 'week');
+                setOutcome(
+                  result.ok
+                    ? `${result.summary} Identical calls in this space now run without asking, for one week. Revoke any time under Standing grants.`
+                    : result.summary,
+                );
+              })
+            }
+          >
+            Approve · allow for a week
+          </button>
+        ) : null}
         <button
           className="btn btn--primary"
           type="button"

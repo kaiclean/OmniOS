@@ -11,8 +11,15 @@ import 'server-only';
  * `lib/actions/tools.ts` remains the only place a human decision is recorded.
  */
 
-import type { Scope, ToolCall } from '@/lib/domain';
-import { makeRecordId, requiresApproval, scopeKey, validateArgs } from '@/lib/domain';
+import type { PermissionGrant, Scope, ToolCall } from '@/lib/domain';
+import {
+  grantCovers,
+  makeRecordId,
+  parseMcpToolId,
+  requiresApproval,
+  scopeKey,
+  validateArgs,
+} from '@/lib/domain';
 import { getWorkspace, insertRecords } from '@/lib/data/store';
 import { resolveSecrets } from '@/lib/secrets/vault';
 import { resolveTool, runTool } from './executors';
@@ -78,6 +85,53 @@ export async function proposeCore(
       awaitingApproval: false,
       toolCallId: id,
       summary: call.error ?? 'Invalid arguments.',
+      preview,
+      toolLabel: tool.label,
+      risk: tool.risk,
+    };
+  }
+
+  // A standing grant is a per-call decision made in advance — and only for
+  // tools that arrive through a connection. Built-in destructive tools cannot
+  // be granted: parseMcpToolId refuses them here by construction, so deleting
+  // records or resetting a capability stays a fresh human decision forever.
+  const remote = parseMcpToolId(toolId);
+  const grant =
+    gated && remote
+      ? workspace.grants.find((candidate: PermissionGrant) =>
+          grantCovers(
+            candidate,
+            { serverId: remote.serverId, toolName: remote.toolName, scopeKey: scopeKey(scope) },
+            now,
+          ),
+        )
+      : undefined;
+
+  if (gated && grant) {
+    const outcome = await runTool(
+      toolId,
+      { scope, now, actor: 'founder', resolveSecrets },
+      validation.coerced,
+      // The decision the gate requires is the grant itself: who decided is the
+      // founder, when is the moment they granted it, and the call names it.
+      { approval: { decidedBy: 'founder', decidedAt: grant.createdAt } },
+    );
+    const call: ToolCall = {
+      ...base,
+      status: outcome.ok ? 'executed' : 'failed',
+      result: outcome.summary,
+      affectedIds: outcome.affectedIds ?? [],
+      decidedBy: 'founder',
+      decidedAt: grant.createdAt,
+      grantId: grant.id,
+      ...(outcome.error ? { error: outcome.error } : {}),
+    };
+    await insertRecords(scope, 'toolCalls', [call]);
+    return {
+      ok: outcome.ok,
+      awaitingApproval: false,
+      toolCallId: id,
+      summary: `${outcome.summary} — ran under your standing grant (“${grant.note}”).`,
       preview,
       toolLabel: tool.label,
       risk: tool.risk,

@@ -13,6 +13,7 @@ import type {
   McpAutonomy,
   McpConnectionState,
   McpServerConfig,
+  PermissionGrant,
   EvolutionEvent,
   Observation,
   RoutingHint,
@@ -238,6 +239,12 @@ export interface WorkspaceRoot {
   readonly mcpServers: McpServerConfig[];
   /** Last probe result per server. A cache of a network fact, never authority. */
   readonly mcpStates: McpConnectionState[];
+  /**
+   * Approvals recorded in advance: narrow, revocable, optionally expiring.
+   * Root-level like the connections they scope to — but a call made under one
+   * is still recorded in its space, carrying the grant id.
+   */
+  readonly grants: PermissionGrant[];
 }
 
 export const DEFAULT_SETTINGS: OsSettings = {
@@ -279,5 +286,6 @@ export function normaliseRoot(raw: WorkspaceRoot): WorkspaceRoot {
     reports: raw.reports ?? [],
     mcpServers: raw.mcpServers ?? [],
     mcpStates: raw.mcpStates ?? [],
+    grants: raw.grants ?? [],
   };
 }
