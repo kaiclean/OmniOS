@@ -1,0 +1,297 @@
+/* ============================================================================
+   OmniOS design tokens — "Quiet Machine"
+   ----------------------------------------------------------------------------
+   Thesis: an operating system a founder lives inside for years should behave
+   like a well-made instrument, not a product demo. Density without noise.
+   Colour as structure, never decoration. The only thing that glows is the thing
+   that needs a decision.
+
+   Five principles, encoded below:
+   1. One accent per space, derived from the space itself — never a second brand.
+   2. Depth comes from a surface ladder and hairlines, not shadows or glass.
+   3. Numbers are typographic objects: tabular, aligned, never re-flowing.
+   4. Motion confirms a change; it never announces one.
+   5. Absence renders as an em dash. Never a zero, never a guess.
+
+   Colour is authored in oklch because the space-tint mechanism rotates hue at
+   fixed lightness and chroma. In sRGB that would make yellow spaces glare and
+   blue spaces vanish; in oklch every space gets the same perceived weight and
+   therefore the same contrast guarantees.
+   ========================================================================== */
+
+:root {
+  /* --- space tint ---------------------------------------------------------
+     Set per space by the shell (see lib/ui/space-tint.ts). 258 is the OS's own
+     hue — the neutral state when no space is active. Lightness and chroma are
+     fixed here so no company can ever mint an inaccessible accent. */
+  --space-hue: 258;
+  --accent-l: 0.76;
+  /* Held just inside the sRGB gamut boundary at this lightness, so no hue on the
+     ring clips to grey and every space's accent carries the same weight. */
+  --accent-c: 0.118;
+
+  --accent: oklch(var(--accent-l) var(--accent-c) var(--space-hue));
+  --accent-bright: oklch(0.84 var(--accent-c) var(--space-hue));
+  --accent-muted: oklch(0.62 calc(var(--accent-c) * 0.8) var(--space-hue));
+  --accent-ghost: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.14);
+  --accent-hairline: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.32);
+  /* The wash that re-tints the whole shell when you enter a space. Deliberately
+     at the edge of perception: you should feel the room change, not see paint. */
+  --tint-wash: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.05);
+  --tint-wash-strong: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.09);
+
+  /* --- surfaces (dark, default) ------------------------------------------
+     Warm-neutral graphite. Never pure black — black is a hole, graphite is a
+     material. Each step is a real elevation, used consistently. */
+  --canvas: #0b0b0c;
+  --surface-1: #121214;
+  --surface-2: #17181b;
+  --surface-3: #1e2023;
+  --surface-4: #26282c;
+  --overlay: #131315;
+
+  --hairline: #232427;
+  --hairline-strong: #303237;
+  --hairline-faint: #1a1b1d;
+
+  /* --- text (dark) --------------------------------------------------------
+     Contrast on --canvas #0b0b0c:
+       text-1 #f5f5f4 ≈ 17.4:1   text-2 #a5a5a3 ≈  7.6:1
+       text-3 #757572 ≈  4.1:1   text-4 #55555a ≈  2.4:1
+     text-3 is for non-essential labels at ≥14px; text-4 never carries meaning
+     on its own. */
+  --text-1: #f5f5f4;
+  --text-2: #a5a5a3;
+  --text-3: #757572;
+  --text-4: #55555a;
+  --text-on-accent: #0b0b0c;
+
+  /* --- semantics ----------------------------------------------------------
+     Fixed hues so they never collide with a space tint's meaning. */
+  --ok: oklch(0.78 0.13 152);
+  --ok-ghost: oklch(0.78 0.13 152 / 0.14);
+  --warn: oklch(0.82 0.13 78);
+  --warn-ghost: oklch(0.82 0.13 78 / 0.14);
+  --deny: oklch(0.7 0.16 24);
+  --deny-ghost: oklch(0.7 0.16 24 / 0.14);
+  --info: oklch(0.78 0.09 232);
+  --info-ghost: oklch(0.78 0.09 232 / 0.14);
+
+  /* Depth without shadows: a hairline top highlight reads as a lit edge. */
+  --edge-highlight: inset 0 1px 0 rgb(255 255 255 / 0.045);
+  --edge-highlight-strong: inset 0 1px 0 rgb(255 255 255 / 0.08);
+  /* The only real shadow in the system, reserved for things that float. */
+  --lift: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -8px rgb(0 0 0 / 0.55);
+  --lift-high: 0 2px 4px rgb(0 0 0 / 0.4), 0 32px 64px -16px rgb(0 0 0 / 0.7);
+
+  /* --- type ---------------------------------------------------------------
+     One family. Weight and size carry hierarchy; a second family would be a
+     decoration budget spent on nothing. */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --fs-display: clamp(2rem, 1.4rem + 2.2vw, 2.9rem);
+  --fs-title: clamp(1.375rem, 1.15rem + 0.85vw, 1.75rem);
+  --fs-heading: 1.0625rem;
+  --fs-body: 0.9375rem;
+  --fs-small: 0.8125rem;
+  --fs-micro: 0.6875rem;
+  --fs-metric: clamp(1.5rem, 1.2rem + 1vw, 1.875rem);
+
+  --lh-tight: 1.15;
+  --lh-snug: 1.35;
+  --lh-body: 1.55;
+
+  --tracking-display: -0.022em;
+  --tracking-title: -0.016em;
+  --tracking-body: -0.006em;
+  /* Micro labels are the one place letterspacing earns its keep. */
+  --tracking-micro: 0.07em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* --- space --------------------------------------------------------------
+     4px base. Named by size, not by purpose, so nothing is misused by name. */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.25rem;
+  --s-6: 1.5rem;
+  --s-8: 2rem;
+  --s-10: 2.5rem;
+  --s-12: 3rem;
+  --s-16: 4rem;
+
+  --r-xs: 5px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-full: 999px;
+
+  /* --- shell geometry ----------------------------------------------------- */
+  --rail-w: 15.5rem;
+  --rail-w-collapsed: 4rem;
+  --copilot-w: 23.5rem;
+  --strip-h: 4.25rem;
+  --topbar-h: 3.25rem;
+  --content-max: 88rem;
+
+  /* --- motion -------------------------------------------------------------
+     Three durations only. If something needs a fourth, it is doing too much. */
+  --dur-1: 120ms;
+  --dur-2: 200ms;
+  --dur-3: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  --focus-ring: 0 0 0 2px var(--canvas), 0 0 0 4px var(--accent);
+
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- light --- */
+
+:root[data-theme='light'] {
+  --canvas: #fbfbfa;
+  --surface-1: #ffffff;
+  --surface-2: #f6f6f4;
+  --surface-3: #efefec;
+  --surface-4: #e6e6e2;
+  --overlay: #ffffff;
+
+  --hairline: #e4e4e0;
+  --hairline-strong: #d2d2cd;
+  --hairline-faint: #eeeeea;
+
+  /* Contrast on --canvas #fbfbfa:
+       text-1 #16161a ≈ 16.4:1   text-2 #5b5b5f ≈ 6.9:1
+       text-3 #79797d ≈ 4.6:1    text-4 #a3a3a6 ≈ 2.6:1 */
+  --text-1: #16161a;
+  --text-2: #5b5b5f;
+  --text-3: #79797d;
+  --text-4: #a3a3a6;
+  --text-on-accent: #ffffff;
+
+  /* Accents darken in light mode so they carry the same contrast against paper. */
+  --accent-l: 0.53;
+  --accent-c: 0.148;
+  --accent-bright: oklch(0.45 var(--accent-c) var(--space-hue));
+  --accent-muted: oklch(0.66 calc(var(--accent-c) * 0.7) var(--space-hue));
+  --accent-ghost: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.1);
+  --accent-hairline: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.28);
+  --tint-wash: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.035);
+  --tint-wash-strong: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.06);
+
+  --ok: oklch(0.52 0.14 152);
+  --warn: oklch(0.56 0.13 68);
+  --deny: oklch(0.52 0.18 25);
+  --info: oklch(0.53 0.12 245);
+
+  --edge-highlight: inset 0 1px 0 rgb(255 255 255 / 0.9);
+  --edge-highlight-strong: inset 0 1px 0 rgb(255 255 255 / 1);
+  --lift: 0 1px 2px rgb(20 20 24 / 0.06), 0 12px 28px -10px rgb(20 20 24 / 0.16);
+  --lift-high: 0 2px 6px rgb(20 20 24 / 0.08), 0 32px 64px -16px rgb(20 20 24 / 0.22);
+
+  color-scheme: light;
+}
+
+/* "System" follows the OS, using exactly the same light values. */
+@media (prefers-color-scheme: light) {
+  :root[data-theme='system'] {
+    --canvas: #fbfbfa;
+    --surface-1: #ffffff;
+    --surface-2: #f6f6f4;
+    --surface-3: #efefec;
+    --surface-4: #e6e6e2;
+    --overlay: #ffffff;
+
+    --hairline: #e4e4e0;
+    --hairline-strong: #d2d2cd;
+    --hairline-faint: #eeeeea;
+
+    --text-1: #16161a;
+    --text-2: #5b5b5f;
+    --text-3: #79797d;
+    --text-4: #a3a3a6;
+    --text-on-accent: #ffffff;
+
+    --accent-l: 0.53;
+    --accent-c: 0.148;
+    --accent-bright: oklch(0.45 var(--accent-c) var(--space-hue));
+    --accent-muted: oklch(0.66 calc(var(--accent-c) * 0.7) var(--space-hue));
+    --accent-ghost: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.1);
+    --accent-hairline: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.28);
+    --tint-wash: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.035);
+    --tint-wash-strong: oklch(var(--accent-l) var(--accent-c) var(--space-hue) / 0.06);
+
+    --ok: oklch(0.52 0.14 152);
+    --warn: oklch(0.56 0.13 68);
+    --deny: oklch(0.52 0.18 25);
+    --info: oklch(0.53 0.12 245);
+
+    --edge-highlight: inset 0 1px 0 rgb(255 255 255 / 0.9);
+    --edge-highlight-strong: inset 0 1px 0 rgb(255 255 255 / 1);
+    --lift: 0 1px 2px rgb(20 20 24 / 0.06), 0 12px 28px -10px rgb(20 20 24 / 0.16);
+    --lift-high: 0 2px 6px rgb(20 20 24 / 0.08), 0 32px 64px -16px rgb(20 20 24 / 0.22);
+
+    color-scheme: light;
+  }
+}
+
+/* --------------------------------------------------------- reduced motion --- */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 1ms;
+    --dur-2: 1ms;
+    --dur-3: 1ms;
+  }
+}
+
+/* The Settings toggle must win over the media query, in both directions. */
+:root[data-motion='reduced'] {
+  --dur-1: 1ms;
+  --dur-2: 1ms;
+  --dur-3: 1ms;
+}
+
+/* A founder who switched tint off gets the OS hue everywhere, permanently. */
+:root[data-tint='off'] {
+  --space-hue: 258 !important;
+}
+
+/* ------------------------------------------------- personal life is warmer ---
+   Personal life differs from a company by *material*, not only by hue. A company
+   headquarters is a dense grid of tiles; a life is an editorial column with more
+   air in it. Walking between them should feel like leaving an office and
+   entering a study — same building, different flooring. */
+
+[data-space-kind='personal'] {
+  --canvas: #100e0b;
+  --surface-1: #17140f;
+  --surface-2: #1c1913;
+  --surface-3: #232019;
+  --surface-4: #2b2720;
+  --hairline: #272319;
+  --hairline-strong: #35301f;
+  --hairline-faint: #1e1b14;
+  --row-h: 2.5rem;
+  --r-lg: 18px;
+  --measure: 64ch;
+}
+
+:root[data-theme='light'] [data-space-kind='personal'],
+:root[data-theme='system'] [data-space-kind='personal'] {
+  --canvas: #fcfaf6;
+  --surface-1: #ffffff;
+  --surface-2: #f8f5ef;
+  --surface-3: #f1ede4;
+  --surface-4: #e8e3d7;
+  --hairline: #e8e3d8;
+  --hairline-strong: #d6d0c1;
+  --hairline-faint: #f0ece3;
+}

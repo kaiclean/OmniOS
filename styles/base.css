@@ -1,0 +1,234 @@
+/* ============================================================================
+   Base — reset, typography, focus.
+   Nothing here is decorative. Every rule removes an inconsistency or sets a
+   default the rest of the system relies on.
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--canvas);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  letter-spacing: var(--tracking-body);
+  font-weight: var(--weight-regular);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* Metric-heavy UI: digits must never re-flow as values update. */
+  font-variant-numeric: tabular-nums;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  background: none;
+  border: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: var(--weight-medium);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-title);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--hairline);
+}
+
+/* --------------------------------------------------------------- focus --- */
+
+/* Keyboard focus is loud on purpose; pointer focus is silent. This is a
+   keyboard-first system and the ring has to be findable at a glance. */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--r-xs);
+}
+
+::selection {
+  background: var(--accent-ghost);
+  color: var(--text-1);
+}
+
+/* ------------------------------------------------------------ scrollbar --- */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--r-full);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-4);
+  background-clip: content-box;
+}
+
+/* ------------------------------------------------------------ utilities --- */
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'ss01';
+}
+
+/* The system's one piece of letterspaced type: section eyebrows and axis
+   labels. Anything longer than four words must not use it. */
+.eyebrow {
+  font-size: var(--fs-micro);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-micro);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+.faint {
+  color: var(--text-3);
+}
+
+.numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: 200;
+  padding: var(--s-2) var(--s-4);
+  background: var(--surface-3);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  transform: translateY(-200%);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.wrap {
+  flex-wrap: wrap;
+}
+
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
