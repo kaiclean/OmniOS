@@ -104,6 +104,9 @@ export async function runActLoop(
 
       const outcome = await proposeCore(options.scope, planned.toolId, planned.args, {
         now: options.now,
+        // Distinct per step, so two identical calls in one turn are two records
+        // rather than one id written twice. Deterministic, so tests stay stable.
+        sequence: steps.length,
       });
       steps.push({
         toolId: planned.toolId,

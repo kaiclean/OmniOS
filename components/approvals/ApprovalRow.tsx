@@ -7,7 +7,7 @@ import { RISK_EXPLANATION, parseMcpToolId } from '@/lib/domain';
 import { formatRelative } from '@/lib/format';
 import { approveToolCall, rejectToolCall } from '@/lib/actions/tools';
 import { approveAndAlwaysAllow } from '@/lib/actions/grants';
-import { Badge } from '@/components/ui/primitives';
+import { Badge, RelativeTime} from '@/components/ui/primitives';
 
 /**
  * One decision.
@@ -45,7 +45,7 @@ export function ApprovalRow({
         <p className="prose">{call.preview}</p>
 
         <span className="hint">
-          {RISK_EXPLANATION[call.risk]} Proposed {formatRelative(call.at)}.
+          {RISK_EXPLANATION[call.risk]} Proposed <RelativeTime at={call.at} />.
         </span>
 
         {args.length > 0 ? (

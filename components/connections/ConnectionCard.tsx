@@ -11,7 +11,7 @@ import {
   setMcpServerEnabled,
   setMcpToolEnabled,
 } from '@/lib/actions/mcp';
-import { Badge, Note } from '@/components/ui/primitives';
+import { Badge, Note, RelativeTime} from '@/components/ui/primitives';
 import { ServerForm } from './ServerForm';
 
 const RISK_TONE: Readonly<Record<RiskTier, 'accent' | 'outline' | 'warn'>> = {
@@ -116,7 +116,7 @@ export function ConnectionCard({
               <span className="hint">
                 {state?.serverName ?? server.id}
                 {state?.serverVersion ? ` ${state.serverVersion}` : ''} · checked{' '}
-                {formatRelative(state?.checkedAt)}
+                <RelativeTime at={state?.checkedAt} />
                 {state?.latencyMs === undefined ? '' : ` · ${state.latencyMs}ms`}
               </span>
               <span className="hint">

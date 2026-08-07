@@ -124,7 +124,12 @@ async function writeVault(file: SecretVaultFile): Promise<void> {
   await serialiseVaultWrite(async () => {
     const path = vaultPath();
     await mkdir(dirname(path), { recursive: true });
-    const temp = `${path}.${process.pid}.tmp`;
+    // Unique per write, not just per process. The promise queue above serialises
+    // writes *within one module instance*, and Next instantiates a module once
+    // per graph — `app-rsc` and `app-ssr` each get their own copy, so each gets
+    // its own queue and they race with each other under one pid. A name that
+    // cannot collide removes the dependence on module identity entirely.
+    const temp = `${path}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`;
     await writeFile(temp, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
     await chmod(temp, 0o600);
     await rename(temp, path);

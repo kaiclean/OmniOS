@@ -11,7 +11,7 @@ import {
   openMeeting,
   speakInMeeting,
 } from '@/lib/actions/meetings';
-import { Badge, Empty, SimulatedMark } from '@/components/ui/primitives';
+import { Badge, Empty, SimulatedMark, RelativeTime} from '@/components/ui/primitives';
 
 /**
  * The room.
@@ -108,7 +108,7 @@ export function MeetingRoom({
             <div key={`${turn.at}:${index}`} className={`msg msg--${turn.speakerId === 'founder' ? 'founder' : 'assistant'}`}>
               <div className="msg-meta">
                 {nameOf(turn.speakerId)}
-                {turn.addresseeId ? ` → ${nameOf(turn.addresseeId)}` : ''} · {formatRelative(turn.at)}
+                {turn.addresseeId ? ` → ${nameOf(turn.addresseeId)}` : ''} · <RelativeTime at={turn.at} />
                 {turn.simulated ? <> · <SimulatedMark label="composed locally" /></> : null}
               </div>
               <div className="msg-body">{turn.text}</div>

@@ -42,7 +42,21 @@ export async function proposeCore(
   scope: Scope,
   toolId: string,
   raw: Readonly<Record<string, unknown>>,
-  options: { readonly runId?: string; readonly now?: Date } = {},
+  options: {
+    readonly runId?: string;
+    readonly now?: Date;
+    /**
+     * Which step of a multi-step turn this is.
+     *
+     * The id is derived from scope, tool, timestamp and arguments so it stays
+     * deterministic. The acting loop freezes `now` for a whole turn — it has to,
+     * or a generator would read the clock — so a model that plans the *same*
+     * call twice across two rounds produced two records with the same id, and
+     * `insertRecords` prepended the duplicate. Observed for real: an identical
+     * `search_workspace` repeated in rounds two and four.
+     */
+    readonly sequence?: number;
+  } = {},
 ): Promise<ProposeOutcome> {
   const now = options.now ?? new Date();
   const at = now.toISOString();
@@ -64,7 +78,10 @@ export async function proposeCore(
   const workspace = await getWorkspace();
   const gated = requiresApproval(tool.risk, { confirmWrites: workspace.settings.confirmWrites });
 
-  const id = makeRecordId('call', `${scopeKey(scope)}:${toolId}:${at}:${JSON.stringify(validation.coerced)}`);
+  const id = makeRecordId(
+    'call',
+    `${scopeKey(scope)}:${toolId}:${at}:${options.sequence ?? 0}:${JSON.stringify(validation.coerced)}`,
+  );
   const preview = tool.preview(validation.coerced);
   const base = {
     id,

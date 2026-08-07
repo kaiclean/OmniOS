@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { newMeeting, recommendParticipants } from '@/lib/ai/meeting';
-import { getSpecialist } from '@/lib/ai/specialists';
+import { SPECIALISTS, getSpecialist } from '@/lib/ai/specialists';
 import { getTool } from '@/lib/ai/tools';
 import { personalScope, validateArgs } from '@/lib/domain';
 
@@ -47,5 +47,36 @@ describe('the meeting room', () => {
       notes: 'From the meeting "x" — owner: chief-of-staff.',
     });
     expect(validation.ok).toBe(true);
+  });
+});
+
+/**
+ * A room with one person in it is not a room.
+ *
+ * `recommendParticipants` seats whoever the topic names and falls back to the
+ * chief of staff alone when nothing matches. That fallback is correct — better
+ * one honest chair than five specialists guessing — but it fired on ordinary
+ * founder vocabulary: "quoting" (because `sales` declared `quote`, and
+ * `indexOf` is a substring test, not a stem) and "hiring" (which no specialist
+ * in the roster declared at all, despite `operator` owning the hr capability).
+ *
+ * The fix is data, per CLAUDE.md: a specialist is a registry entry, not a branch.
+ * This test is the thing that notices when the vocabulary drifts behind the
+ * words founders actually use.
+ */
+describe('the room seats more than the chair for ordinary topics', () => {
+  it.each([
+    ['Our quoting is manual and inconsistent. What should we change first?', 'sales'],
+    ['Why are we behind on delivery, and how do we ship twice as fast?', 'project-manager'],
+    ['Should we raise prices next quarter?', 'cfo'],
+    ['Our marketing is not generating leads', 'marketer'],
+    ['How do we reduce costs and extend runway?', 'cfo'],
+    ['what should we do about hiring', 'operator'],
+  ])('seats %s alongside the chair', (topic, expected) => {
+    const seated = recommendParticipants(topic, 'company', SPECIALISTS).map((s) => s.id);
+    expect(seated, topic).toContain('chief-of-staff');
+    expect(seated, topic).toContain(expected);
+    expect(seated.length, `${topic} seated only the fallback`).toBeGreaterThan(1);
+    expect(seated.length).toBeLessThanOrEqual(5);
   });
 });

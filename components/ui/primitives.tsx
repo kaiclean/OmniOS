@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 
 import { Icon, type IconName } from './Icon';
 import type { PanelSpan } from '@/lib/capabilities/panels';
-import { EMPTY, deltaOf, formatKpiValue } from '@/lib/format';
+import { EMPTY, deltaOf, formatKpiValue, formatRelative } from '@/lib/format';
 import type { Kpi } from '@/lib/domain';
 
 /* ---------------------------------------------------------------- panel --- */
@@ -339,4 +339,22 @@ export function Note({
       </div>
     </div>
   );
+}
+
+/**
+ * A timestamp rendered relative to now, without lying about hydration.
+ *
+ * `formatRelative` defaults to `new Date()`. In a Client Component that is two
+ * different instants: the server renders "59 minutes ago", the browser hydrates
+ * a moment later and computes "1 hour ago", and React tears the tree down with
+ * "server rendered text didn't match". It fired on /approvals every time.
+ *
+ * `suppressHydrationWarning` is the honest fix rather than a silencer: both
+ * strings are correct for the instant that produced them, and the mismatch is
+ * time passing, not a bug. Keeping the server's text also means no re-render, so
+ * nothing shifts on hydration — which is the design rule this would otherwise
+ * break if we swapped an absolute date for a relative one after mount.
+ */
+export function RelativeTime({ at }: { at: string | Date | null | undefined }) {
+  return <span suppressHydrationWarning>{formatRelative(at)}</span>;
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 
 import { speakToAgent } from '@/lib/actions/agents';
+import { RelativeTime } from '@/components/ui/primitives';
 import { formatRelative } from '@/lib/format';
 
 export interface AgentChatMessage {
@@ -46,7 +47,7 @@ export function AgentChat({
               className={`msg msg--${message.role === 'user' ? 'founder' : 'assistant'}`}
             >
               <div className="msg-meta">
-                {message.role === 'user' ? 'You' : agentName} · {formatRelative(message.at)}
+                {message.role === 'user' ? 'You' : agentName} · <RelativeTime at={message.at} />
                 {message.simulated ? ' · composed locally' : ''}
               </div>
               <div className="msg-body">{message.text}</div>

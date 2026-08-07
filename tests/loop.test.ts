@@ -140,3 +140,33 @@ describe('the loop is bounded', () => {
     expect(loop.describeLoop(result).join(' ')).toContain('rather than keep going unattended');
   }, 60_000);
 });
+
+describe('a turn never writes the same record twice', () => {
+  /**
+   * The loop freezes `now` for a whole turn — it must, or a generator would read
+   * the clock — and a ToolCall id is derived from scope, tool, timestamp and
+   * args. So a model repeating an identical call across two rounds produced two
+   * records with the SAME id, and `insertRecords` prepended the duplicate. It
+   * surfaced as React refusing to render the approvals list: "two children with
+   * the same key". Seen for real with an identical `search_workspace` in rounds
+   * two and four.
+   */
+  it('writes two distinct records when the model repeats itself', async () => {
+    const repeat = { name: 'search_workspace', args: { query: 'rothbau', collection: 'docs' } };
+    const { provider } = scripted([[repeat], [repeat], []]);
+
+    const before = (await store.readCollection(personalScope(), 'toolCalls')).length;
+    const result = await loop.runActLoop('look for rothbau twice', {
+      scope: personalScope(),
+      provider,
+      now: NOW,
+    });
+
+    expect(result.steps).toHaveLength(2);
+    const after = await store.readCollection(personalScope(), 'toolCalls');
+    expect(after.length - before).toBe(2);
+
+    const ids = after.slice(0, 2).map((call) => call.id);
+    expect(new Set(ids).size, `both steps must have their own id, got ${ids.join(' and ')}`).toBe(2);
+  }, 30_000);
+});
