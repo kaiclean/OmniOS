@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 import { activeProvider, providerStatus } from '@/lib/ai/providers';
-import { capabilityIds } from '@/lib/capabilities/registry';
+import { CAPABILITIES, capabilityIds } from '@/lib/capabilities/registry';
 import { loadSpaces } from '@/lib/data/aggregate';
 import { COLLECTION_NAMES } from '@/lib/data/schema';
 import { debugScopeKey, getWorkspace, readScope, storeInfo } from '@/lib/data/store';
@@ -65,7 +65,13 @@ export default async function SettingsPage() {
           subtitle="Stored on the workspace root and read by the server, so a reload never flashes the previous choice"
           span={8}
         >
-          <SettingsForm settings={workspace.settings} />
+          <SettingsForm
+            settings={workspace.settings}
+            capabilities={CAPABILITIES.map((capability) => ({
+              id: capability.id,
+              label: capability.name,
+            }))}
+          />
         </Panel>
 
         <div className="stack span-4" style={{ gap: 'var(--s-5)' }}>

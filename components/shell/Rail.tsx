@@ -86,6 +86,7 @@ export function Rail({
       </div>
 
       <div className="rail-foot">
+        <NavLink href="/connections" icon="plug" label="Connections" />
         <NavLink href="/settings" icon="settings" label="Settings" />
       </div>
     </nav>

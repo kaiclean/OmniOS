@@ -44,6 +44,7 @@ export type IconName =
   | 'calendar'
   | 'file'
   | 'shield'
+  | 'plug'
   | 'panel'
   | 'menu'
   | 'sun';
@@ -200,6 +201,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   shield: <path d="M8 2.2 13 4v4c0 3-2.2 4.8-5 5.8C5.2 12.8 3 11 3 8V4z" />,
+  plug: (
+    <>
+      <path d="M6 2v3.5M10 2v3.5" />
+      <path d="M4 5.5h8v2.2A3.8 3.8 0 0 1 8.2 11.5h-.4A3.8 3.8 0 0 1 4 7.7z" />
+      <path d="M8 11.5V14" />
+    </>
+  ),
   panel: (
     <>
       <rect x="2.4" y="3" width="11.2" height="10" rx="1.1" />
