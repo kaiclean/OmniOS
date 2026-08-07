@@ -9,7 +9,7 @@
  */
 
 import type { CompanyDraft, Scope } from '@/lib/domain';
-import { companyScope, makeRecordId, personalScope, sharedScope } from '@/lib/domain';
+import { DEFAULT_TELEGRAM_CONFIG, companyScope, makeRecordId, personalScope, sharedScope } from '@/lib/domain';
 import type { ScopeData, WorkspaceRoot } from './schema';
 import { DEFAULT_SETTINGS, emptyScopeData } from './schema';
 import { generateCompanyWorkspace } from '@/lib/generation/company-hq';
@@ -154,6 +154,7 @@ export function buildInitialWorkspace(now: Date = new Date()): InitialWorkspace 
     mcpServers: [],
     mcpStates: [],
     grants: [],
+    telegram: DEFAULT_TELEGRAM_CONFIG,
   };
 
   return { root, scopes };
@@ -174,6 +175,7 @@ export function buildEmptyWorkspace(displayName = 'Kai', now: Date = new Date())
     mcpServers: [],
     mcpStates: [],
     grants: [],
+    telegram: DEFAULT_TELEGRAM_CONFIG,
   };
   return { root, scopes: [[personalScope(), emptyScopeData()] as const] };
 }

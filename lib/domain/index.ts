@@ -18,4 +18,5 @@ export * from './secrets';
 export * from './learning';
 export * from './agents';
 export * from './grants';
+export * from './telegram';
 export * from './mcp';

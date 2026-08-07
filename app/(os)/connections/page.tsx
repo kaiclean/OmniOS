@@ -20,6 +20,7 @@ import {
 import { AddConnection } from '@/components/connections/AddConnection';
 import { ConnectionCard } from '@/components/connections/ConnectionCard';
 import { PresetPicker } from '@/components/connections/PresetPicker';
+import { TelegramPanel } from '@/components/connections/TelegramPanel';
 import { SecretsPanel } from '@/components/connections/SecretsPanel';
 
 export const metadata: Metadata = { title: 'Connections' };
@@ -165,6 +166,21 @@ export default async function ConnectionsPage() {
           footer="Each of these is an MCP server maintained by someone else. OmniOS writes the configuration; installing and trusting the server is your decision."
         >
           <PresetPicker existingIds={workspace.mcpServers.map((server) => server.id)} />
+        </Panel>
+      </div>
+
+      <SectionHead title="Approvals on your phone" />
+      <div className="grid">
+        <Panel
+          span={8}
+          title="Telegram"
+          subtitle="A second door onto the approvals inbox — signed, bound to one chat, and through the same gate"
+        >
+          <TelegramPanel
+            config={workspace.telegram}
+            tokenStored={vault.secrets.some((secret) => secret.name === 'TELEGRAM_BOT_TOKEN')}
+            webhookSecretSet={Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim())}
+          />
         </Panel>
       </div>
 

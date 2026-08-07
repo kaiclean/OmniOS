@@ -73,12 +73,17 @@ describe('invariant 2 — a decision has exactly two authors', () => {
   /**
    * `runTool` refuses a gated tier without an approval, so the set of files that
    * may *construct* one is the real perimeter. Today it is two, and each has a
-   * different warrant: `lib/actions/tools.ts` records a decision the founder
-   * just made, and `lib/ai/tools/propose.ts` carries one they made in advance as
-   * a grant. A third author is a regression even if it looks harmless.
+   * different warrant: `lib/approvals/decide.ts` records a decision someone just
+   * made, and `lib/ai/tools/propose.ts` carries one made in advance as a grant.
+   * A third author is a regression even if it looks harmless.
+   *
+   * `decide.ts` is not a Server Action, and that is the point: it takes the
+   * decider as an argument, so it must not be reachable from a browser that
+   * could pass one. Every entry point fixes its own — the app passes the local
+   * founder, the webhook passes the chat a signature bound it to.
    */
   it('is constructed in exactly the two files that are allowed to', async () => {
-    const allowed = new Set([join('lib', 'actions', 'tools.ts'), join('lib', 'ai', 'tools', 'propose.ts')]);
+    const allowed = new Set([join('lib', 'approvals', 'decide.ts'), join('lib', 'ai', 'tools', 'propose.ts')]);
     const offenders: string[] = [];
 
     for (const root of ['lib', 'app', 'components']) {

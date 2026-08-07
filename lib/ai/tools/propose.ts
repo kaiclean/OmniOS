@@ -23,6 +23,7 @@ import {
 import { getWorkspace, insertRecords } from '@/lib/data/store';
 import { resolveSecrets } from '@/lib/secrets/vault';
 import { resolveTool, runTool } from './executors';
+import { notifyPendingCall } from '@/lib/telegram/approvals';
 
 export interface ProposeOutcome {
   readonly ok: boolean;
@@ -141,6 +142,11 @@ export async function proposeCore(
   if (gated) {
     const call: ToolCall = { ...base, status: 'awaiting-approval' };
     await insertRecords(scope, 'toolCalls', [call]);
+    // Second door onto the same inbox. Deliberately after the record is written
+    // and deliberately unawaited-for-failure: a Telegram outage must not stop a
+    // call being queued, because the approvals page is the source of truth and
+    // this is only a way to be told about it sooner.
+    await notifyPendingCall(call, spaceLabelFor(scope, workspace));
     return {
       ok: true,
       awaitingApproval: true,
@@ -170,4 +176,12 @@ export async function proposeCore(
     toolLabel: tool.label,
     risk: tool.risk,
   };
+}
+
+/** The founder's own name for the space, for a message that arrives out of context. */
+function spaceLabelFor(scope: Scope, workspace: { companies: ReadonlyArray<{ id: string; name: string }>; personal: { displayName: string } }): string {
+  if (scope.kind === 'company') {
+    return workspace.companies.find((company) => company.id === scope.companyId)?.name ?? scope.companyId;
+  }
+  return workspace.personal.displayName;
 }
