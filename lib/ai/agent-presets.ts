@@ -141,3 +141,6 @@ export const AGENT_PRESETS: readonly AgentPreset[] = [
 export function getPreset(id: string): AgentPreset | undefined {
   return AGENT_PRESETS.find((preset) => preset.id === id);
 }
+
+/** Preset ids, for the tool that hires them. Derived, so a new preset is offerable at once. */
+export const AGENT_PRESET_IDS = AGENT_PRESETS.map((preset) => preset.id);
