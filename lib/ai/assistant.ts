@@ -10,7 +10,8 @@
 import 'server-only';
 
 import type { AgentRun, AssistantMessage, DelegationPlan, MemoryRecord } from '@/lib/domain';
-import { makeRecordId, personalScope, scopeKey, sharedScope } from '@/lib/domain';
+import { makeRecordId, parseScopeKey, personalScope, scopeKey, sharedScope } from '@/lib/domain';
+import type { Scope } from '@/lib/domain';
 import { getWorkspace, insertRecords, readScope } from '@/lib/data/store';
 import { capabilityIds, getCapability } from '@/lib/capabilities/registry';
 import type { AssistantTone } from '@/lib/data/schema';
@@ -22,6 +23,8 @@ import { buildDelegationPlan, route } from './router';
 import { compose } from './compose';
 import { activeProvider } from './providers';
 import { learnFromInteraction } from '@/lib/learning/engine';
+import { detectAct } from './act';
+import { proposeCore } from './tools/propose';
 
 /**
  * Assemble the context a target is allowed to see.
@@ -133,6 +136,39 @@ export async function ask(
   const routing = route(prompt, allowedKinds.length ? allowedKinds : ['personal'], hints);
   const composition = compose(ctx, prompt, routing);
 
+  // Acting. The scope a call lands in is decided here — server-side, never by
+  // the model: space mode acts in that space; founder mode acts in the space of
+  // the page being looked at, or nowhere. Every planned call goes through the
+  // same propose→gate path as a typed form.
+  const provider = await activeProvider();
+  const actScope: Scope | null =
+    target.kind === 'space'
+      ? target.scope
+      : target.page && target.page.spaceKey !== 'os'
+        ? (parseScopeKey(target.page.spaceKey) ?? null)
+        : null;
+
+  const actLines: string[] = [];
+  if (actScope && actScope.kind !== 'shared') {
+    const decision = await detectAct(prompt, {
+      scope: actScope,
+      provider,
+      now,
+      ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
+    });
+    if (decision.note) actLines.push(decision.note);
+    for (const planned of decision.calls) {
+      const outcome = await proposeCore(actScope, planned.toolId, planned.args, { now });
+      if (outcome.awaitingApproval) {
+        actLines.push(`Queued for your approval: ${outcome.preview} Decide it under Approvals.`);
+      } else if (outcome.ok) {
+        actLines.push(`Done: ${outcome.summary}`);
+      } else {
+        actLines.push(`Could not ${outcome.toolLabel.toLowerCase()}: ${outcome.summary}`);
+      }
+    }
+  }
+
   const plan = buildDelegationPlan({
     prompt,
     routing,
@@ -141,7 +177,6 @@ export async function ask(
     outputs: composition.outputs,
   });
 
-  const provider = await activeProvider();
   let text = composition.body;
   let simulated = true;
   let tokensIn: number | undefined;
@@ -172,6 +207,10 @@ export async function ask(
       // A provider failure must never lose the answer: the local grounding stands
       // on its own, and the UI will show that it was locally generated.
     }
+  }
+
+  if (actLines.length > 0) {
+    text = `${actLines.join('\n')}\n\n${text}`;
   }
 
   const finishedAt = new Date().toISOString();

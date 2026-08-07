@@ -6,6 +6,7 @@ import type { Scope, ToolCall, ToolOutcome } from '@/lib/domain';
 import { companyScope, makeRecordId, personalScope, requiresApproval, scopeKey, validateArgs } from '@/lib/domain';
 import { getWorkspace, insertRecords, readCollection, updateRecord } from '@/lib/data/store';
 import { resolveTool, runTool } from '@/lib/ai/tools/executors';
+import { proposeCore } from '@/lib/ai/tools/propose';
 import { resolveSecrets } from '@/lib/secrets/vault';
 
 /**
@@ -58,70 +59,17 @@ export async function proposeToolCall(
   raw: Readonly<Record<string, unknown>>,
   options: { readonly runId?: string; readonly now?: Date } = {},
 ): Promise<ProposeResult> {
-  const now = options.now ?? new Date();
-  const at = now.toISOString();
-
-  const tool = await resolveTool(toolId);
-  if (!tool) {
-    return {
-      ok: false,
-      awaitingApproval: false,
-      toolCallId: '',
-      summary: `No tool called “${toolId}” is available here.`,
-    };
-  }
-
-  const validation = validateArgs(tool, raw);
-  const workspace = await getWorkspace();
-  const gated = requiresApproval(tool.risk, { confirmWrites: workspace.settings.confirmWrites });
-
-  const id = makeRecordId('call', `${scopeKey(scope)}:${toolId}:${at}:${JSON.stringify(validation.coerced)}`);
-  const base = {
-    id,
-    scope,
-    createdAt: at,
-    updatedAt: at,
-    toolId,
-    args: validation.coerced,
-    risk: tool.risk,
-    // Computed from the coerced arguments, before anything runs. An approval
-    // request that described something other than what would happen would be
-    // worse than no approval request.
-    preview: tool.preview(validation.coerced),
-    affectedIds: [] as string[],
-    at,
-    ...(options.runId ? { runId: options.runId } : {}),
-  };
-
-  if (!validation.ok) {
-    const call: ToolCall = {
-      ...base,
-      status: 'failed',
-      error: validation.errors.join('; '),
-    };
-    await insertRecords(scope, 'toolCalls', [call]);
-    revalidatePath('/', 'layout');
-    return { ok: false, awaitingApproval: false, toolCallId: id, summary: call.error ?? 'Invalid arguments.' };
-  }
-
-  if (gated) {
-    const call: ToolCall = { ...base, status: 'awaiting-approval' };
-    await insertRecords(scope, 'toolCalls', [call]);
-    revalidatePath('/', 'layout');
-    return { ok: true, awaitingApproval: true, toolCallId: id, summary: call.preview };
-  }
-
-  const outcome = await runTool(toolId, contextFor(scope, now), validation.coerced);
-  const call: ToolCall = {
-    ...base,
-    status: outcome.ok ? 'executed' : 'failed',
-    result: outcome.summary,
-    affectedIds: outcome.affectedIds ?? [],
-    ...(outcome.error ? { error: outcome.error } : {}),
-  };
-  await insertRecords(scope, 'toolCalls', [call]);
+  // The persist-then-gate-then-maybe-run order lives in proposeCore now, so the
+  // assistant can propose without importing an action module. This wrapper adds
+  // only what a Server Action owes the UI: revalidation.
+  const outcome = await proposeCore(scope, toolId, raw, options);
   revalidatePath('/', 'layout');
-  return { ok: outcome.ok, awaitingApproval: false, toolCallId: id, summary: outcome.summary };
+  return {
+    ok: outcome.ok,
+    awaitingApproval: outcome.awaitingApproval,
+    toolCallId: outcome.toolCallId,
+    summary: outcome.summary,
+  };
 }
 
 async function findCall(scope: Scope, toolCallId: string): Promise<ToolCall | undefined> {
