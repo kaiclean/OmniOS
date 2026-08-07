@@ -30,6 +30,8 @@ export interface ProposeOutcome {
   readonly awaitingApproval: boolean;
   readonly toolCallId: string;
   readonly summary: string;
+  /** Records the call created or changed — how a caller links to what it made. */
+  readonly affectedIds?: readonly string[];
   /** The preview persisted on the call — what an approval decides about. */
   readonly preview: string;
   readonly toolLabel: string;
@@ -133,6 +135,7 @@ export async function proposeCore(
       awaitingApproval: false,
       toolCallId: id,
       summary: `${outcome.summary} — ran under your standing grant (“${grant.note}”).`,
+      ...(outcome.affectedIds ? { affectedIds: outcome.affectedIds } : {}),
       preview,
       toolLabel: tool.label,
       risk: tool.risk,
@@ -172,6 +175,7 @@ export async function proposeCore(
     awaitingApproval: false,
     toolCallId: id,
     summary: outcome.summary,
+    ...(outcome.affectedIds ? { affectedIds: outcome.affectedIds } : {}),
     preview,
     toolLabel: tool.label,
     risk: tool.risk,

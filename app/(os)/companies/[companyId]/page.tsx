@@ -52,6 +52,9 @@ export default async function CompanyOverviewPage({
         actions={
           <>
             {company.generated ? <Badge tone="outline">Sample workspace</Badge> : null}
+            <Link className="btn btn--secondary" href={`${basePath}/room`}>
+              Team Room
+            </Link>
             <Link className="btn btn--secondary" href={`${basePath}/dna`}>
               Company DNA
             </Link>

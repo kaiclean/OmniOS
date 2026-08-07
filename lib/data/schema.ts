@@ -14,6 +14,7 @@ import type {
   McpAutonomy,
   McpConnectionState,
   McpServerConfig,
+  Meeting,
   PermissionGrant,
   EvolutionEvent,
   Observation,
@@ -86,6 +87,7 @@ export interface ScopeData {
   routingHints: RoutingHint[];
   specialistScores: SpecialistScore[];
   customAgents: CustomAgent[];
+  meetings: Meeting[];
 }
 
 export type CollectionName = keyof ScopeData;
@@ -121,6 +123,7 @@ export const COLLECTION_NAMES: readonly CollectionName[] = [
   'routingHints',
   'specialistScores',
   'customAgents',
+  'meetings',
 ];
 
 export function emptyScopeData(): ScopeData {
@@ -155,6 +158,7 @@ export function emptyScopeData(): ScopeData {
     routingHints: [],
     specialistScores: [],
     customAgents: [],
+    meetings: [],
   };
 }
 
