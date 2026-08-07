@@ -188,10 +188,15 @@ export const MCP_PRESETS: readonly McpPreset[] = [
   {
     id: 'fetch',
     name: 'Web fetch',
-    description: 'Retrieve a URL and return its content as text.',
+    // `@modelcontextprotocol/server-fetch` does not exist and never did — the
+    // registry returns 404. This preset was unusable from the day it shipped,
+    // and it is the one most often recommended as the easy first connection,
+    // so the failure landed on exactly the founder least equipped to diagnose
+    // it. The real server is Python, published to PyPI, and run through uv.
+    description: 'Retrieve a URL and return its content as text. Needs uv installed (brew install uv).',
     transport: 'stdio',
-    command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-fetch'],
+    command: 'uvx',
+    args: ['mcp-server-fetch'],
     capabilityId: 'research',
     suggestedAutonomy: 'ask-writes',
     unlocks: 'Reading the open web — competitor pages, documentation, sources for research.',
