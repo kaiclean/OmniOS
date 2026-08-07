@@ -7,10 +7,18 @@
  *
  * Routing is declarative: it scores the prompt against each specialist's `matches`
  * list. Adding a specialist never means editing this file.
+ *
+ * It is also *corrigible*. Before the keywords get a vote, the router consults the
+ * routing hints the founder's earlier corrections left behind, and an exact hint
+ * overrides the keyword winner. A correction that does not change the next answer
+ * is not learning, so the override is deliberate rather than advisory — but it is
+ * still bounded by scope: only specialists eligible for this target are ever
+ * offered to the hint layer.
  */
 
-import type { DelegationPlan, DelegationStep, SpecialistAgent } from '@/lib/domain';
+import type { DelegationPlan, DelegationStep, RoutingHint, SpecialistAgent } from '@/lib/domain';
 import { makeRecordId } from '@/lib/domain';
+import { matchHint, scoreWithHints } from '@/lib/learning/routing';
 import { SPECIALISTS, getSpecialist } from './specialists';
 import type { AssistantContext, ContextReferenceInput } from './types';
 
@@ -78,21 +86,69 @@ export function scoreSpecialists(
 /** When nothing matches, the Chief of Staff takes it — that is what a chief of staff is for. */
 const FALLBACK_ID = 'chief-of-staff';
 
+export interface AppliedHint {
+  readonly id: string;
+  readonly phrase: string;
+  readonly weight: number;
+  readonly exact: boolean;
+  readonly correctedFrom?: string;
+}
+
 export interface RoutingResult {
   readonly lead: SpecialistAgent;
   readonly supporting: readonly SpecialistAgent[];
   readonly scores: readonly RouteScore[];
   /** 0..1 confidence that the lead is the right specialist. */
   readonly confidence: number;
+  /** Set when a founder correction decided this route rather than the keywords. */
+  readonly hint?: AppliedHint;
+}
+
+/**
+ * A hint may only ever re-weight a specialist this target is already allowed to
+ * use. A hinted specialist with no keyword hit is admitted at zero so the
+ * correction can still win — a founder's correction is usually about a phrase the
+ * keywords got wrong, which often means they matched nothing at all.
+ */
+function candidatesWithHint(
+  keyword: readonly RouteScore[],
+  prompt: string,
+  hints: readonly RoutingHint[],
+  allowedKinds: ReadonlyArray<'company' | 'personal'>,
+): RouteScore[] {
+  const match = matchHint(hints, prompt);
+  if (!match) return [...keyword];
+
+  const hinted = getSpecialist(match.hint.specialistId);
+  if (!hinted) return [...keyword];
+  if (!hinted.allowedScopeKinds.some((kind) => allowedKinds.includes(kind))) return [...keyword];
+  if (keyword.some((entry) => entry.specialist.id === hinted.id)) return [...keyword];
+
+  return [...keyword, { specialist: hinted, score: 0, matched: [] }];
 }
 
 export function route(
   prompt: string,
   allowedKinds: ReadonlyArray<'company' | 'personal'>,
+  hints: readonly RoutingHint[] = [],
 ): RoutingResult {
-  const scores = scoreSpecialists(prompt, allowedKinds);
+  const keyword = scoreSpecialists(prompt, allowedKinds);
   const fallback = getSpecialist(FALLBACK_ID);
   if (!fallback) throw new Error('Chief of Staff specialist is missing from the registry');
+
+  const candidates = candidatesWithHint(keyword, prompt, hints, allowedKinds);
+  const hinted = scoreWithHints(
+    candidates.map((entry) => ({ specialistId: entry.specialist.id, score: entry.score })),
+    hints,
+    prompt,
+  );
+
+  const byId = new Map(candidates.map((entry) => [entry.specialist.id, entry]));
+  const scores: RouteScore[] = hinted.flatMap((entry) => {
+    const original = byId.get(entry.specialistId);
+    return original ? [{ ...original, score: entry.score }] : [];
+  });
+  const applied = hinted.find((entry) => entry.hintId !== undefined);
 
   if (scores.length === 0) {
     return { lead: fallback, supporting: [], scores, confidence: 0.35 };
@@ -103,7 +159,11 @@ export function route(
   const share = total > 0 ? top.score / total : 0;
   // A clear winner with several matched phrases is worth more confidence than a
   // narrow win decided by one incidental keyword.
-  const confidence = Math.min(0.96, 0.4 + share * 0.4 + Math.min(top.matched.length, 4) * 0.05);
+  const scored = Math.min(0.96, 0.4 + share * 0.4 + Math.min(top.matched.length, 4) * 0.05);
+  const decidedByHint = applied?.specialistId === top.specialist.id;
+  // Nothing the keywords can compute beats being told. A hinted lead is as certain
+  // as this router gets, and stays below 1 because the founder can still be wrong.
+  const confidence = decidedByHint && applied?.hintExact ? Math.max(scored, 0.9) : scored;
 
   const supporting = scores
     .slice(1)
@@ -111,7 +171,22 @@ export function route(
     .slice(0, 2)
     .map((s) => s.specialist);
 
-  return { lead: top.specialist, supporting, scores, confidence };
+  return {
+    lead: top.specialist,
+    supporting,
+    scores,
+    confidence,
+    ...(decidedByHint && applied?.hintId
+      ? {
+          hint: {
+            id: applied.hintId,
+            phrase: applied.hintPhrase ?? '',
+            weight: applied.hintWeight ?? 1,
+            exact: applied.hintExact ?? false,
+          },
+        }
+      : {}),
+  };
 }
 
 /** True when a step would reach anything outside OmniOS. Those steps stop for approval. */

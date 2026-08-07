@@ -18,6 +18,7 @@ import { targetKey } from './context';
 import { buildDelegationPlan, route } from './router';
 import { compose } from './compose';
 import { activeProvider } from './providers';
+import { learnFromInteraction } from '@/lib/learning/engine';
 
 /**
  * Assemble the context a target is allowed to see.
@@ -101,7 +102,11 @@ export async function ask(
   const ctx = await loadContext(target, now);
 
   const allowedKinds = [...new Set(ctx.slices.map((s) => s.spaceKind))];
-  const routing = route(prompt, allowedKinds.length ? allowedKinds : ['personal']);
+  // Corrections the founder made in the spaces this question can see. A hint from
+  // a company the founder is not currently in never reaches this list, because the
+  // slices are the only thing that was read.
+  const hints = ctx.slices.flatMap((slice) => slice.data.routingHints);
+  const routing = route(prompt, allowedKinds.length ? allowedKinds : ['personal'], hints);
   const composition = compose(ctx, prompt, routing);
 
   const plan = buildDelegationPlan({
@@ -187,6 +192,30 @@ export async function ask(
 
   await insertRecords(storageScope, 'messages', [message, founderMessage]);
   await insertRecords(storageScope, 'agentRuns', [run]);
+
+  // The interaction is not over when the answer is written. This is the step that
+  // makes "learns with every interaction" a property of the code rather than a
+  // claim in a README: observations are drawn, beliefs are reinforced or fade,
+  // consulted specialists get an invocation, and used memory gets stronger.
+  await learnFromInteraction({
+    interaction: {
+      scope: storageScope,
+      prompt,
+      at: startedAt,
+      capabilityId: routing.lead.capabilityIds[0] ?? 'executive',
+      specialistId: routing.lead.id,
+      touched: plan.contextUsed.map((reference) => ({
+        kind: reference.kind,
+        id: reference.id,
+        label: reference.label,
+      })),
+      outcome: 'answered',
+    },
+    now,
+    specialistIds: [routing.lead.id, ...routing.supporting.map((s) => s.id)],
+    used: plan.contextUsed,
+    ...(routing.hint ? { appliedHintId: routing.hint.id } : {}),
+  });
 
   return { message, plan, run };
 }
