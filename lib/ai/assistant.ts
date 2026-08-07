@@ -24,9 +24,10 @@ import { rosterFor } from './roster';
 import { compose } from './compose';
 import { activeProvider } from './providers';
 import { learnFromInteraction } from '@/lib/learning/engine';
+import type { LoopResult } from './loop';
 import { describeLoop, runActLoop } from './loop';
+import { availableTools } from './available';
 import { describeSelf } from './self';
-import { toolsForScope } from './tools';
 import { NOT_WIRED_TOOL_IDS } from './tools/executors';
 
 /**
@@ -158,14 +159,15 @@ export async function ask(
         : null;
 
   const actLines: string[] = [];
+  let loopResult: LoopResult | undefined;
   if (actScope && actScope.kind !== 'shared') {
-    const loop = await runActLoop(prompt, {
+    loopResult = await runActLoop(prompt, {
       scope: actScope,
       provider,
       now,
       ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
     });
-    actLines.push(...describeLoop(loop));
+    actLines.push(...describeLoop(loopResult));
   }
 
   const plan = buildDelegationPlan({
@@ -181,6 +183,18 @@ export async function ask(
   let tokensIn: number | undefined;
   let tokensOut: number | undefined;
 
+  // What the loop actually found, for the answering model. Without this the
+  // voice contradicts the evidence: observed live, a search returned three
+  // matching tasks and the reply said "no task record exists" in the same
+  // breath, because the results were pasted above the answer rather than given
+  // to the thing writing it.
+  const loopFindings =
+    loopResult && loopResult.steps.length > 0
+      ? `\n\nWhat you did this turn, and what each step returned. These results are fresher than the analysis above — where they disagree, the results win:\n${loopResult.steps
+          .map((step) => `- ${step.toolId}: ${step.summary}`)
+          .join('\n')}`
+      : '';
+
   if (!provider.simulated) {
     try {
       const workspace = await getWorkspace();
@@ -194,8 +208,11 @@ export async function ask(
               // Rides on every turn. Without it the assistant reasons about its
               // own abilities from priors about assistants in general, which is
               // how it ends up telling the founder to ask somebody else.
+              // Built-in *and* bridged: the answering half must know exactly
+              // what the planning half can reach, or it disclaims abilities the
+              // loop just used.
               describeSelf({
-                tools: actScope && actScope.kind !== 'shared' ? toolsForScope(actScope) : [],
+                tools: actScope && actScope.kind !== 'shared' ? await availableTools(actScope) : [],
                 servers: workspace.mcpServers,
                 states: workspace.mcpStates,
                 unwiredToolIds: NOT_WIRED_TOOL_IDS,
@@ -204,7 +221,7 @@ export async function ask(
           },
           {
             role: 'user',
-            content: `The founder asked: "${prompt}"\n\nAnalysis computed from their records:\n\n${composition.body}\n\nWrite the reply.`,
+            content: `The founder asked: "${prompt}"\n\nAnalysis computed from their records:\n\n${composition.body}${loopFindings}\n\nWrite the reply.`,
           },
         ],
       });

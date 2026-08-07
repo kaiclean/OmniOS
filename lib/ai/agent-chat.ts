@@ -30,6 +30,14 @@ export async function directAgentReply(
   specialist: SpecialistAgent,
   history: readonly AssistantMessage[],
   prompt: string,
+  options: {
+    /**
+     * What the act loop did for this turn, pre-formatted. Given to the persona
+     * so its words agree with what actually happened — an agent that just
+     * searched and found three records must not claim there are none.
+     */
+    readonly activity?: string;
+  } = {},
 ): Promise<AgentReply> {
   const data = await readScope(scope);
   const briefing = briefingFor(specialist, data);
@@ -54,7 +62,11 @@ ${briefing}`,
           },
           {
             role: 'user',
-            content: `${recent ? `Recent conversation:\n${recent}\n\n` : ''}The founder says: "${prompt}". Respond as ${specialist.name}.`,
+            content: `${recent ? `Recent conversation:\n${recent}\n\n` : ''}The founder says: "${prompt}".${
+              options.activity
+                ? `\n\nWhat you just did for this, and what each step returned. These results are fresher than your briefing — where they disagree, the results win:\n${options.activity}`
+                : ''
+            } Respond as ${specialist.name}.`,
           },
         ],
         maxTokens: 2048,

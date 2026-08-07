@@ -9,6 +9,8 @@ import { capabilityIds } from '@/lib/capabilities/registry';
 import { getPreset } from '@/lib/ai/agent-presets';
 import { getSpecialist } from '@/lib/ai/specialists';
 import { agentChannel, directAgentReply } from '@/lib/ai/agent-chat';
+import { describeLoop, runActLoop } from '@/lib/ai/loop';
+import { activeProvider } from '@/lib/ai/providers';
 import { rosterFor } from '@/lib/ai/roster';
 
 /**
@@ -237,7 +239,16 @@ export async function speakToAgent(
     channel,
   };
 
-  const reply = await directAgentReply(scope, specialist, history, trimmed);
+  // The agent can find things out and do things, through exactly the loop the
+  // assistant uses: reads run, writes run, anything gated queues for the
+  // founder and halts the loop. Hiring changed who speaks, never what may run.
+  const loop = await runActLoop(trimmed, { scope, provider: await activeProvider(), now });
+  const actLines = describeLoop(loop);
+  const activity = loop.steps.map((step) => `- ${step.toolId}: ${step.summary}`).join('\n');
+
+  const reply = await directAgentReply(scope, specialist, history, trimmed, {
+    ...(activity ? { activity } : {}),
+  });
   const replyAt = new Date().toISOString();
   const agentMessage: AssistantMessage = {
     id: makeRecordId('msg', `${channel}:agent:${replyAt}:${reply.text.slice(0, 60)}`),
@@ -245,7 +256,7 @@ export async function speakToAgent(
     createdAt: replyAt,
     updatedAt: replyAt,
     role: 'assistant',
-    text: reply.text,
+    text: actLines.length > 0 ? `${actLines.join('\n')}\n\n${reply.text}` : reply.text,
     at: replyAt,
     simulated: reply.simulated,
     providerId: reply.providerId,

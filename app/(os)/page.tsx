@@ -1,7 +1,8 @@
 import Link from 'next/link';
 
-import { acrossSpaces, loadSpaces, overviewSnapshot } from '@/lib/data/aggregate';
+import { acrossSpaces, loadSpaces, overviewSnapshot, setupProgress } from '@/lib/data/aggregate';
 import { getWorkspace } from '@/lib/data/store';
+import { activeProvider } from '@/lib/ai/providers';
 import {
   EMPTY,
   daysBetween,
@@ -60,6 +61,9 @@ export default async function HomePage() {
   );
 
   const awaiting = workspace.upgrades.filter((u) => u.stage === 'awaiting-approval');
+  const provider = await activeProvider();
+  const setup = setupProgress(spaces, workspace, { hasRealProvider: !provider.simulated });
+  const nextStep = setup.steps.find((step) => !step.done);
   const hour = new Date().getHours();
   const greeting = hour < 5 ? 'Still up' : hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening';
 
@@ -90,6 +94,40 @@ export default async function HomePage() {
           </Link>
           .
         </Note>
+      ) : null}
+
+      {!setup.complete ? (
+        <section className="panel" style={{ marginTop: 'var(--s-6)' }}>
+          <div className="panel-body stack" style={{ gap: 'var(--s-3)' }}>
+            <div className="spread">
+              <span className="panel-title">Zero to hero</span>
+              <span className="hint">
+                {setup.done} of {setup.total} — checked from your records, never a stored checklist
+              </span>
+            </div>
+            <div className="meter" aria-hidden="true">
+              <div className="meter-fill meter-fill--ok" style={{ width: `${(setup.done / setup.total) * 100}%` }} />
+            </div>
+            <div className="row wrap" style={{ gap: 'var(--s-2)' }}>
+              {setup.steps.map((step) =>
+                step.done ? (
+                  <Badge key={step.id} tone="ok" dot>
+                    {step.label}
+                  </Badge>
+                ) : (
+                  <Link key={step.id} className="btn btn--ghost btn--sm" href={step.href} title={step.detail}>
+                    {step.label}
+                  </Link>
+                ),
+              )}
+            </div>
+            {nextStep ? (
+              <span className="hint">
+                Next: <Link className="link-inline" href={nextStep.href}>{nextStep.label.toLowerCase()}</Link> — {nextStep.detail}
+              </span>
+            ) : null}
+          </div>
+        </section>
       ) : null}
 
       <div className="grid" style={{ marginTop: 'var(--s-6)' }}>

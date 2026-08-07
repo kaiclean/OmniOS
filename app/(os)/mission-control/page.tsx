@@ -42,7 +42,10 @@ export default async function MissionControlPage() {
   const liveConnections = workspace.mcpStates.filter((state) => state.status === 'connected');
 
   const decisionsWaiting = pendingCalls.length + upgradesAwaiting.length + planReady.length;
-  const recent = buildTimeline(spaces, workspace, { limit: 14 });
+  // Reads stay on the full timeline; the digest shows what changed or waits.
+  const recent = buildTimeline(spaces, workspace, { limit: 80 })
+    .filter((event) => !event.readOnly)
+    .slice(0, 14);
 
   return (
     <>
