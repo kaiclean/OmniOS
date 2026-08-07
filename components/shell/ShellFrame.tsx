@@ -5,12 +5,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { OS_HUE, hueForSpaceKey, tintStyle } from '@/lib/ui/space-tint';
 import { CommandPalette, type Command } from './CommandPalette';
+import { Copilot, type CopilotProps } from './Copilot';
 import { Icon } from '@/components/ui/Icon';
 
 export interface ShellFrameProps {
+  /** Server Components, fully rendered before they get here. */
   rail: React.ReactNode;
   strip: React.ReactNode;
-  copilot: React.ReactNode;
+  /**
+   * The copilot arrives as *data*, not as an element.
+   *
+   * Passing a Client Component element from a Server Component into another
+   * Client Component makes React materialise it as an unkeyed item in the
+   * receiving component's child list, which warns; keying it then reorders the
+   * children and breaks hydration. Since ShellFrame is itself a client
+   * component it can just render Copilot directly, and the boundary disappears.
+   * Rail and Strip are Server Components, so they must stay as elements.
+   */
+  copilot: CopilotProps;
   commands: readonly Command[];
   children: React.ReactNode;
 }
@@ -126,9 +138,12 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
           >
             <Icon name="menu" />
           </button>
-          {/* Only the metrics scroll. The actions must stay reachable at every
-              width — a command palette you cannot reach is not a command palette. */}
-          <div className="strip-scroll">{strip}</div>
+          {/* Strip brings its own `.strip-scroll` container: only the metrics
+              scroll, and the actions stay reachable at every width — a command
+              palette you cannot reach is not a command palette. It has to be a
+              single element rather than a list, or React warns about a missing
+              key on the boundary element itself. */}
+          {strip}
           <div className="strip-actions">
             <button
               type="button"
@@ -157,7 +172,7 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
         </main>
       </div>
 
-      {copilot}
+      <Copilot {...copilot} />
 
       {paletteOpen ? <CommandPalette commands={commands} onClose={closePalette} /> : null}
     </div>

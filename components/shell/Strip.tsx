@@ -24,9 +24,12 @@ interface CellSpec {
  * Money is month-to-date and excludes forecasts. A daily figure would be a row
  * of dashes on most days; a figure that mixed in projections would be a lie.
  *
- * Cells are built as data rather than written as JSX because this component is
- * rendered on the server and handed to a Client Component as a prop: a fragment
- * crossing that boundary is serialised as a list, and a list needs keys.
+ * This component renders on the server and is handed to a Client Component as a
+ * prop, so it must return a **single root element** — it owns its own scroll
+ * container for that reason. Anything list-shaped at that boundary (a fragment
+ * or a bare array) is serialised as children of the client component, which then
+ * warns about missing keys no matter how well the items themselves are keyed:
+ * the unkeyed thing is the boundary element, not the cells.
  */
 export function Strip({ snapshot }: { snapshot: OverviewSnapshot }) {
   const { money, energy } = snapshot;
@@ -79,7 +82,13 @@ export function Strip({ snapshot }: { snapshot: OverviewSnapshot }) {
     },
   ];
 
-  return cells.map((cell) => <Cell key={cell.id} {...cell} />);
+  return (
+    <div className="strip-scroll">
+      {cells.map((cell) => (
+        <Cell key={cell.id} {...cell} />
+      ))}
+    </div>
+  );
 }
 
 function Cell({ label, value, suffix, href, tone }: CellSpec) {

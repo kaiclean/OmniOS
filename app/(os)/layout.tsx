@@ -9,7 +9,6 @@ import { ShellFrame } from '@/components/shell/ShellFrame';
 import type { Command } from '@/components/shell/CommandPalette';
 import { Rail } from '@/components/shell/Rail';
 import { Strip } from '@/components/shell/Strip';
-import { Copilot } from '@/components/shell/Copilot';
 
 /**
  * The workspace lives on the local filesystem and every mutation is a Server
@@ -42,17 +41,15 @@ export default async function OsLayout({ children }: { children: React.ReactNode
         />
       }
       strip={<Strip snapshot={snapshot} />}
-      copilot={
-        <Copilot
-          assistantName={workspace.settings.assistantName}
-          providerLabel={provider.label}
-          providerSimulated={provider.simulated}
-          initialMessages={initialMessages}
-          companyNames={companyNames}
-          personalName={workspace.personal.displayName}
-          suggestions={ASSISTANT_SUGGESTIONS}
-        />
-      }
+      copilot={{
+        assistantName: workspace.settings.assistantName,
+        providerLabel: provider.label,
+        providerSimulated: provider.simulated,
+        initialMessages,
+        companyNames,
+        personalName: workspace.personal.displayName,
+        suggestions: ASSISTANT_SUGGESTIONS,
+      }}
     >
       {children}
     </ShellFrame>
