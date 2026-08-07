@@ -12,7 +12,10 @@ import 'server-only';
 import type { AgentRun, AssistantMessage, DelegationPlan, MemoryRecord } from '@/lib/domain';
 import { makeRecordId, personalScope, scopeKey, sharedScope } from '@/lib/domain';
 import { getWorkspace, insertRecords, readScope } from '@/lib/data/store';
-import { capabilityIds } from '@/lib/capabilities/registry';
+import { capabilityIds, getCapability } from '@/lib/capabilities/registry';
+import type { AssistantTone } from '@/lib/data/schema';
+import { TONE_INSTRUCTION } from '@/lib/data/schema';
+import { pageContextLabelParts } from '@/lib/ui/page-context';
 import type { AssistantContext, AssistantTarget, SpaceSlice } from './context';
 import { targetKey } from './context';
 import { buildDelegationPlan, route } from './router';
@@ -81,11 +84,32 @@ export async function loadContext(target: AssistantTarget, now = new Date()): Pr
   };
 }
 
-const SYSTEM_PROMPT = `You are the Executive Assistant inside OmniOS, an operating system a founder runs their companies and their private life from.
+function systemPrompt(tone: AssistantTone, locationLine: string | null): string {
+  return [
+    `You are the Executive Assistant inside OmniOS, an operating system a founder runs their companies and their private life from.`,
+    '',
+    `You are given an analysis that was already computed from the founder's own records. Every number in it is real. Your job is to phrase it well — never to add facts, numbers, dates or names that are not in the analysis. If something is unknown, say it is unknown.`,
+    '',
+    // The tone the founder chose in settings shapes wording only. The analysis
+    // was computed before the model was involved, so no tone can soften a figure.
+    `Voice: ${TONE_INSTRUCTION[tone]}`,
+    ...(locationLine ? ['', locationLine] : []),
+    '',
+    `Keep any figures exactly as given.`,
+  ].join('\n');
+}
 
-You are given an analysis that was already computed from the founder's own records. Every number in it is real. Your job is to phrase it well — never to add facts, numbers, dates or names that are not in the analysis. If something is unknown, say it is unknown.
-
-Write like a chief of staff who respects the founder's time: direct, specific, no preamble, no flattery, no filler. Short paragraphs. Keep any figures exactly as given.`;
+/** "The founder is looking at: Meridian Build / Marketing." Wording only. */
+function locationLineFor(target: AssistantTarget, ctx: AssistantContext): string | null {
+  const page = target.page;
+  if (!page) return null;
+  const parts = pageContextLabelParts(page, {
+    companyNames: Object.fromEntries(ctx.companies.map((c) => [c.id, c.name])),
+    personalName: ctx.personal.displayName,
+    capabilityName: (id) => getCapability(id)?.name,
+  });
+  return `The founder is currently looking at: ${parts.join(' / ')}. When their question is ambiguous, read it against this screen first.`;
+}
 
 export interface AskResult {
   readonly message: AssistantMessage;
@@ -125,9 +149,13 @@ export async function ask(
 
   if (!provider.simulated) {
     try {
+      const workspace = await getWorkspace();
       const response = await provider.complete({
         messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
+          {
+            role: 'system',
+            content: systemPrompt(workspace.settings.assistantTone, locationLineFor(target, ctx)),
+          },
           {
             role: 'user',
             content: `The founder asked: "${prompt}"\n\nAnalysis computed from their records:\n\n${composition.body}\n\nWrite the reply.`,

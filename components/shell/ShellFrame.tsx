@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { OS_HUE, hueForSpaceKey, tintStyle } from '@/lib/ui/space-tint';
+import { derivePageContext } from '@/lib/ui/page-context';
 import { CommandPalette, type Command } from './CommandPalette';
 import { Copilot, type CopilotProps } from './Copilot';
 import { Icon } from '@/components/ui/Icon';
@@ -27,28 +28,21 @@ export interface ShellFrameProps {
   children: React.ReactNode;
 }
 
-/**
- * Derive the active space from the URL.
- *
- * Doing this on the client means the room re-tints the instant a link is
- * clicked, before any server response arrives — which is the difference between
- * "the page changed" and "I walked into a different room".
- */
-function spaceFromPath(pathname: string): { key: string; kind: 'company' | 'personal' | 'os' } {
-  const companyMatch = /^\/companies\/([^/]+)/.exec(pathname);
-  if (companyMatch?.[1] && companyMatch[1] !== 'new') {
-    return { key: `company:${companyMatch[1]}`, kind: 'company' };
-  }
-  if (pathname === '/life' || pathname.startsWith('/life/')) {
-    return { key: 'personal', kind: 'personal' };
-  }
-  return { key: 'os', kind: 'os' };
-}
-
 export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFrameProps) {
   const pathname = usePathname();
-  const space = useMemo(() => spaceFromPath(pathname), [pathname]);
-  const hue = useMemo(() => (space.kind === 'os' ? OS_HUE : hueForSpaceKey(space.key)), [space]);
+  // Derived on the client so the room re-tints the instant a link is clicked,
+  // before any server response arrives. One shared derivation with the Copilot
+  // and the server — two private copies of this regex had already disagreed.
+  const page = useMemo(() => derivePageContext(pathname), [pathname]);
+  const spaceKind = page.spaceKey.startsWith('company:')
+    ? 'company'
+    : page.spaceKey === 'personal'
+      ? 'personal'
+      : 'os';
+  const hue = useMemo(
+    () => (page.spaceKey === 'os' ? OS_HUE : hueForSpaceKey(page.spaceKey)),
+    [page.spaceKey],
+  );
 
   const [railOpen, setRailOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -112,7 +106,7 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
     <div
       className="os"
       style={tintStyle(hue) as React.CSSProperties}
-      data-space-kind={space.kind}
+      data-space-kind={spaceKind}
       data-rail={railOpen ? 'open' : 'closed'}
       data-copilot={copilotOpen ? 'open' : 'hidden'}
       data-sheet={sheetOpen ? 'open' : 'closed'}

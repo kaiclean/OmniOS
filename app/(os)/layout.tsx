@@ -3,7 +3,7 @@ import { loadSpaces, overviewSnapshot } from '@/lib/data/aggregate';
 import { getWorkspace } from '@/lib/data/store';
 import { conversation } from '@/lib/ai/assistant';
 import { activeProvider } from '@/lib/ai/providers';
-import { ASSISTANT_SUGGESTIONS } from '@/lib/ai/prompts';
+import { ASSISTANT_SUGGESTIONS, COMPANY_SUGGESTIONS } from '@/lib/ai/prompts';
 import { isIconName } from '@/components/ui/Icon';
 import { ShellFrame } from '@/components/shell/ShellFrame';
 import type { Command } from '@/components/shell/CommandPalette';
@@ -57,6 +57,7 @@ export default async function OsLayout({ children }: { children: React.ReactNode
         companyNames,
         personalName: workspace.personal.displayName,
         suggestions: ASSISTANT_SUGGESTIONS,
+        companySuggestions: COMPANY_SUGGESTIONS,
       }}
     >
       {children}

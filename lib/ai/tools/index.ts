@@ -67,7 +67,17 @@ export interface ToolScore {
  * can top this list and still not run, because execution consults
  * `requiresApproval(tool.risk)` rather than the score.
  */
-export function scoreTools(prompt: string, scope?: Scope): ToolScore[] {
+export interface ScoreToolsOptions {
+  /**
+   * The capability page the founder is standing on. A tool that belongs to it
+   * gets a nudge, because "add a KPI" on the Marketing page more likely means a
+   * marketing KPI than an executive one. A nudge, not a veto — a strong match
+   * from another capability still wins.
+   */
+  readonly preferCapabilityId?: string;
+}
+
+export function scoreTools(prompt: string, scope?: Scope, options: ScoreToolsOptions = {}): ToolScore[] {
   const text = prompt.toLowerCase().replace(/\s+/g, ' ').trim();
   if (!text) return [];
 
@@ -94,6 +104,9 @@ export function scoreTools(prompt: string, scope?: Scope): ToolScore[] {
     if (score === 0) continue;
 
     if (Number.isFinite(earliest)) score += 2 * (1 - earliest / text.length);
+    if (options.preferCapabilityId && tool.capabilityId === options.preferCapabilityId) {
+      score += 1.5;
+    }
     scores.push({ tool, score, matched });
   }
 
