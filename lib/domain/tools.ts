@@ -25,8 +25,21 @@ export type RiskTier = (typeof RISK_TIERS)[number];
 /** Tiers the assistant may execute on its own. Everything else needs a human. */
 export const AUTONOMOUS_RISK_TIERS: readonly RiskTier[] = ['read', 'write'];
 
-export function requiresApproval(risk: RiskTier): boolean {
-  return !AUTONOMOUS_RISK_TIERS.includes(risk);
+/**
+ * Founder settings that affect the gate.
+ *
+ * Note what is absent and will stay absent: there is no option that makes
+ * `destructive` or `external` autonomous. This type can only ever tighten, which
+ * is why it is safe to hand it to a settings form.
+ */
+export interface ApprovalPolicy {
+  /** Hold `write` tools for approval too, not just the two gated tiers. */
+  readonly confirmWrites?: boolean;
+}
+
+export function requiresApproval(risk: RiskTier, policy: ApprovalPolicy = {}): boolean {
+  if (!AUTONOMOUS_RISK_TIERS.includes(risk)) return true;
+  return policy.confirmWrites === true && risk === 'write';
 }
 
 export const RISK_EXPLANATION: Record<RiskTier, string> = {

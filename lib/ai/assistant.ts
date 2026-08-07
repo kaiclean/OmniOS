@@ -117,7 +117,7 @@ export async function ask(
     outputs: composition.outputs,
   });
 
-  const provider = activeProvider();
+  const provider = await activeProvider();
   let text = composition.body;
   let simulated = true;
   let tokensIn: number | undefined;

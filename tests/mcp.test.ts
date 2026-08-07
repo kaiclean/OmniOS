@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import type { McpServerConfig } from '@/lib/domain';
-import { mcpToolId, parseMcpToolId, riskForMcpTool } from '@/lib/domain';
+import type { McpServerConfig, McpToolDescriptor, RiskTier } from '@/lib/domain';
+import { RISK_TIERS, mcpToolId, parseMcpToolId, requiresApproval, riskForMcpTool } from '@/lib/domain';
+import { mcpToolDefinition, mcpToolDefinitions, paramsFromSchema } from '@/lib/ai/tools/mcp-bridge';
 
 /**
  * The MCP layer is the door to everything outside this workspace, so it is
@@ -159,6 +160,117 @@ describe('risk assignment for remote tools', () => {
         expect(riskForMcpTool(name, autonomy)).not.toBe('destructive');
       }
     }
+  });
+});
+
+describe('bridging a remote tool into the tool layer', () => {
+  function descriptor(patch: Partial<McpToolDescriptor> = {}): McpToolDescriptor {
+    return {
+      serverId: 'test-server',
+      name: 'publish_post',
+      description: 'Publish a post to the connected account.',
+      inputSchema: {
+        type: 'object',
+        required: ['text'],
+        properties: {
+          text: { type: 'string', description: 'The body of the post.' },
+          scheduleAt: { type: 'string' },
+          audience: { type: 'string', enum: ['public', 'followers'] },
+          repeat: { type: 'integer', default: 1 },
+          draft: { type: 'boolean' },
+          media: { type: 'array' },
+        },
+      },
+      risk: 'external',
+      ...patch,
+    };
+  }
+
+  it('reads parameters out of the server-declared schema', () => {
+    const params = paramsFromSchema(descriptor().inputSchema);
+    const byName = new Map(params.map((param) => [param.name, param]));
+
+    expect(byName.get('text')?.required).toBe(true);
+    expect(byName.get('text')?.description).toBe('The body of the post.');
+    expect(byName.get('scheduleAt')?.required).toBe(false);
+    expect(byName.get('audience')?.type).toBe('enum');
+    expect(byName.get('audience')?.enumValues).toEqual(['public', 'followers']);
+    expect(byName.get('repeat')?.type).toBe('number');
+    expect(byName.get('repeat')?.default).toBe(1);
+    expect(byName.get('draft')?.type).toBe('boolean');
+    // Structured arguments survive a flat form as JSON text, and stay readable
+    // in the approval preview rather than becoming "[object Object]".
+    expect(byName.get('media')?.type).toBe('text');
+  });
+
+  it('survives a server that describes its tool badly', () => {
+    expect(paramsFromSchema({})).toEqual([]);
+    expect(paramsFromSchema({ properties: 'nonsense' })).toEqual([]);
+    expect(paramsFromSchema({ properties: { x: null } })).toHaveLength(1);
+  });
+
+  it('names the server in the preview, because the account matters', () => {
+    const tool = mcpToolDefinition(config({ name: 'Brand X Instagram' }), descriptor());
+    const preview = tool.preview({ text: 'Launching today' });
+
+    expect(preview).toContain('Brand X Instagram');
+    expect(preview).toContain('publish_post');
+    expect(preview).toContain('Launching today');
+    expect(preview).toMatch(/outside OmniOS/i);
+  });
+
+  it('cannot run without an approval, whatever the server called it', () => {
+    const tool = mcpToolDefinition(config(), descriptor());
+    expect(tool.risk).toBe('external');
+    expect(requiresApproval(tool.risk)).toBe(true);
+  });
+
+  it('hides tools from a server that is switched off', () => {
+    const enabled = mcpToolDefinitions(
+      [config()],
+      [{ serverId: 'test-server', tools: [descriptor()] }],
+    );
+    expect(enabled).toHaveLength(1);
+
+    const disabledServer = mcpToolDefinitions(
+      [config({ enabled: false })],
+      [{ serverId: 'test-server', tools: [descriptor()] }],
+    );
+    expect(disabledServer).toEqual([]);
+
+    // The probe snapshot predates the founder switching the tool off, so the
+    // config has to win over the cache.
+    const disabledTool = mcpToolDefinitions(
+      [config({ disabledTools: ['publish_post'] })],
+      [{ serverId: 'test-server', tools: [descriptor()] }],
+    );
+    expect(disabledTool).toEqual([]);
+  });
+
+  it('namespaces every bridged tool so none can shadow a built-in', () => {
+    const tool = mcpToolDefinition(config(), descriptor({ name: 'create_task' }));
+    expect(tool.id).toBe('mcp:test-server:create_task');
+    expect(tool.id).not.toBe('create_task');
+  });
+});
+
+describe('the approval policy', () => {
+  it('lets the founder tighten the gate onto writes', () => {
+    expect(requiresApproval('write')).toBe(false);
+    expect(requiresApproval('write', { confirmWrites: true })).toBe(true);
+    expect(requiresApproval('read', { confirmWrites: true })).toBe(false);
+  });
+
+  it('offers no policy at all that would let the gated tiers run themselves', () => {
+    const gated: RiskTier[] = ['destructive', 'external'];
+    for (const risk of gated) {
+      for (const policy of [{}, { confirmWrites: false }, { confirmWrites: true }]) {
+        expect(requiresApproval(risk, policy)).toBe(true);
+      }
+    }
+    // And every tier is accounted for, so a new one cannot appear ungated by
+    // default without this failing.
+    expect(RISK_TIERS.filter((risk) => !requiresApproval(risk)).sort()).toEqual(['read', 'write']);
   });
 });
 

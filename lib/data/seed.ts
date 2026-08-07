@@ -151,6 +151,8 @@ export function buildInitialWorkspace(now: Date = new Date()): InitialWorkspace 
     discoveries,
     upgrades,
     reports,
+    mcpServers: [],
+    mcpStates: [],
   };
 
   return { root, scopes };
@@ -168,6 +170,8 @@ export function buildEmptyWorkspace(displayName = 'Kai', now: Date = new Date())
     discoveries: [],
     upgrades: [],
     reports: [],
+    mcpServers: [],
+    mcpStates: [],
   };
   return { root, scopes: [[personalScope(), emptyScopeData()] as const] };
 }

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { conversation } from '@/lib/ai/assistant';
-import { activeProvider, providerStatus } from '@/lib/ai/providers';
+import { activeProvider, providerLabel } from '@/lib/ai/providers';
 import { ASSISTANT_SUGGESTIONS } from '@/lib/ai/prompts';
 import { SPECIALISTS, getSpecialist } from '@/lib/ai/specialists';
 import { getCapability } from '@/lib/capabilities/registry';
@@ -37,7 +37,7 @@ export const metadata: Metadata = { title: 'Assistant' };
  */
 export default async function AssistantPage() {
   const [workspace, messages] = await Promise.all([getWorkspace(), conversation({ kind: 'founder' })]);
-  const provider = activeProvider();
+  const provider = await activeProvider();
 
   const answers = messages.filter((message) => message.role === 'assistant');
   const plans = answers.flatMap((message) => (message.plan ? [message.plan] : []));
@@ -371,10 +371,9 @@ function statusTone(status: DelegationStep['status']): Tone {
 
 /* ---------------------------------------------------------------- utils --- */
 
-/** A stored turn keeps a provider id; the founder should read the provider's name. */
-function providerLabel(providerId: string): string {
-  return providerStatus().find((entry) => entry.id === providerId)?.label ?? providerId;
-}
+// A stored turn keeps a provider id; the founder should read the provider's name.
+// `providerLabel` is a pure lookup, so a page with fifty messages does fifty map
+// reads rather than fifty vault reads.
 
 function countBy(ids: readonly string[]): Map<string, number> {
   const counts = new Map<string, number>();

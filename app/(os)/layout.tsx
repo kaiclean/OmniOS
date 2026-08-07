@@ -23,7 +23,7 @@ export default async function OsLayout({ children }: { children: React.ReactNode
     overviewSnapshot(),
   ]);
 
-  const provider = activeProvider();
+  const provider = await activeProvider();
   const initialMessages = (await conversation({ kind: 'founder' })).slice(-8);
 
   const commands = buildCommands(workspace.companies.map((c) => ({ id: c.id, name: c.name })), workspace.personal.displayName);

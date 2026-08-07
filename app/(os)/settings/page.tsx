@@ -32,8 +32,8 @@ export const metadata: Metadata = { title: 'Settings' };
 export default async function SettingsPage() {
   const [workspace, spaces] = await Promise.all([getWorkspace(), loadSpaces()]);
   const store = storeInfo();
-  const providers = providerStatus();
-  const provider = activeProvider();
+  const providers = await providerStatus();
+  const provider = await activeProvider();
 
   const shared = await Promise.all(
     capabilityIds().map(async (id) => ({ id, memory: (await readScope(sharedScope(id))).memory })),
