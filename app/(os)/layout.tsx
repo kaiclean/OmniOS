@@ -77,6 +77,8 @@ function buildCommands(
 ): Command[] {
   const commands: Command[] = [
     { id: 'home', label: 'Home', group: 'OS', href: '/', icon: 'home', keywords: 'overview today' },
+    { id: 'mission-control', label: 'Mission Control', group: 'OS', href: '/mission-control', icon: 'pulse', keywords: 'live activity pending decisions running' },
+    { id: 'timeline', label: 'Timeline', group: 'OS', href: '/timeline', icon: 'clock', keywords: 'history audit trail events log' },
     { id: 'brain', label: 'Brain — memory & intelligence', group: 'OS', href: '/brain', icon: 'brain', keywords: 'memory learned' },
     { id: 'assistant', label: 'Assistant', group: 'OS', href: '/assistant', icon: 'assistant', keywords: 'chat ai copilot' },
     { id: 'companies', label: 'All companies', group: 'OS', href: '/companies', icon: 'building' },
