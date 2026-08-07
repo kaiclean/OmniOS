@@ -39,10 +39,14 @@ import type {
 import { personalScope, scopeKey, sharedScope } from '@/lib/domain';
 import type { ScopeData } from '@/lib/data/schema';
 import { capabilityIds } from '@/lib/capabilities/registry';
+// Pure and client-safe, so importing it here creates no server/client tangle.
+// The page never chooses what is read — it colours wording and tool preference
+// only, and tests/assistant-context.test.ts holds that line.
+import type { PageContext } from '@/lib/ui/page-context';
 
 export type AssistantTarget =
-  | { readonly kind: 'space'; readonly scope: Scope }
-  | { readonly kind: 'founder' };
+  | { readonly kind: 'space'; readonly scope: Scope; readonly page?: PageContext }
+  | { readonly kind: 'founder'; readonly page?: PageContext };
 
 export interface SpaceSlice {
   readonly scopeKey: string;

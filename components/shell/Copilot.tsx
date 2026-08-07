@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import type { AssistantMessage } from '@/lib/domain';
 import { askAssistant } from '@/lib/actions/assistant';
 import { specialistName } from '@/lib/ai/specialists';
+import { getCapability } from '@/lib/capabilities/registry';
+import { derivePageContext, pageContextLabelParts, targetKeyForPage } from '@/lib/ui/page-context';
 import { Icon } from '@/components/ui/Icon';
 
 export interface CopilotProps {
@@ -16,13 +18,8 @@ export interface CopilotProps {
   companyNames: Readonly<Record<string, string>>;
   personalName: string;
   suggestions: readonly string[];
-}
-
-function targetKeyFor(pathname: string): string {
-  const company = /^\/companies\/([^/]+)/.exec(pathname);
-  if (company?.[1] && company[1] !== 'new') return `company:${company[1]}`;
-  if (pathname === '/life' || pathname.startsWith('/life/')) return 'personal';
-  return 'founder';
+  /** Empty-state chips when the founder is inside a company. */
+  companySuggestions: readonly string[];
 }
 
 /**
@@ -40,9 +37,11 @@ export function Copilot({
   companyNames,
   personalName,
   suggestions,
+  companySuggestions,
 }: CopilotProps) {
   const pathname = usePathname();
-  const targetKey = targetKeyFor(pathname);
+  const page = useMemo(() => derivePageContext(pathname), [pathname]);
+  const targetKey = targetKeyForPage(page);
   const [messages, setMessages] = useState<AssistantMessage[]>([...initialMessages]);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +54,20 @@ export function Copilot({
     const id = targetKey.slice('company:'.length);
     return companyNames[id] ?? 'Company';
   }, [targetKey, companyNames, personalName]);
+
+  // "Meridian Build / Marketing" — what the assistant will read the question
+  // against. Shown above the composer so context is never a surprise.
+  const contextParts = useMemo(
+    () =>
+      pageContextLabelParts(page, {
+        companyNames,
+        personalName,
+        capabilityName: (id) => getCapability(id)?.name,
+      }),
+    [page, companyNames, personalName],
+  );
+
+  const emptyStateSuggestions = targetKey.startsWith('company:') ? companySuggestions : suggestions;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -72,7 +85,7 @@ export function Copilot({
     setError(null);
     setDraft('');
     startTransition(async () => {
-      const result = await askAssistant(targetKey, trimmed);
+      const result = await askAssistant(targetKey, trimmed, pathname);
       const reply = result.message;
       if (!result.ok || !reply) {
         setError(result.error ?? 'That did not work.');
@@ -113,7 +126,7 @@ export function Copilot({
               which specialists to consult.
             </p>
             <div className="stack" style={{ gap: 'var(--s-2)' }}>
-              {suggestions.map((suggestion) => (
+              {emptyStateSuggestions.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
@@ -150,6 +163,9 @@ export function Copilot({
         }}
       >
         <div className="stack" style={{ gap: 'var(--s-2)' }}>
+          <span className="hint" aria-label="Assistant context">
+            {contextParts.join(' / ')}
+          </span>
           <textarea
             data-copilot-input
             className="textarea"
