@@ -8,6 +8,12 @@
 
 import type {
   AgentRun,
+  CustomAgent,
+  EvolutionEvent,
+  Observation,
+  RoutingHint,
+  SpecialistScore,
+  ToolCall,
   AssistantMessage,
   Automation,
   AutomationRun,
@@ -66,6 +72,13 @@ export interface ScopeData {
   learning: LearningItem[];
   lifeAdmin: LifeAdminItem[];
   calendar: CalendarBlock[];
+  /* --- the acting and learning layers ------------------------------------ */
+  toolCalls: ToolCall[];
+  observations: Observation[];
+  evolution: EvolutionEvent[];
+  routingHints: RoutingHint[];
+  specialistScores: SpecialistScore[];
+  customAgents: CustomAgent[];
 }
 
 export type CollectionName = keyof ScopeData;
@@ -95,6 +108,12 @@ export const COLLECTION_NAMES: readonly CollectionName[] = [
   'learning',
   'lifeAdmin',
   'calendar',
+  'toolCalls',
+  'observations',
+  'evolution',
+  'routingHints',
+  'specialistScores',
+  'customAgents',
 ];
 
 export function emptyScopeData(): ScopeData {
@@ -123,6 +142,12 @@ export function emptyScopeData(): ScopeData {
     learning: [],
     lifeAdmin: [],
     calendar: [],
+    toolCalls: [],
+    observations: [],
+    evolution: [],
+    routingHints: [],
+    specialistScores: [],
+    customAgents: [],
   };
 }
 

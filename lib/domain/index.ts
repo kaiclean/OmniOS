@@ -13,3 +13,7 @@ export * from './personal';
 export * from './ai';
 export * from './intelligence';
 export * from './creative';
+export * from './tools';
+export * from './secrets';
+export * from './learning';
+export * from './agents';
