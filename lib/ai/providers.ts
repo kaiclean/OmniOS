@@ -163,7 +163,65 @@ export const openAiProvider: LlmProvider = {
   },
 };
 
-const REGISTRY: readonly LlmProvider[] = [anthropicProvider, openAiProvider, simulatedProvider];
+const OLLAMA_ENDPOINT = 'https://ollama.com/v1/chat/completions';
+const OLLAMA_KEY = 'OLLAMA_API_KEY';
+
+/**
+ * Ollama Cloud, through its OpenAI-compatible endpoint.
+ *
+ * Deliberately last among the real providers: it is the "for now" brain — the
+ * one that makes the assistant real the day the founder has an Ollama key and
+ * nothing else. The moment an Anthropic or OpenAI key lands in the vault,
+ * first-available-wins hands the assistant to it with no further change.
+ */
+export const ollamaProvider: LlmProvider = {
+  id: 'ollama',
+  label: 'Ollama Cloud',
+  simulated: false,
+  keyName: OLLAMA_KEY,
+  available: async () => (await apiKey(OLLAMA_KEY)) !== null,
+  async complete(request: LlmRequest): Promise<LlmResponse> {
+    const key = await apiKey(OLLAMA_KEY);
+    if (!key) throw new Error(`ollamaProvider.complete called without ${OLLAMA_KEY}`);
+
+    const response = await fetch(OLLAMA_ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: process.env.OMNIOS_OLLAMA_MODEL || 'qwen3.5:397b',
+        max_tokens: request.maxTokens ?? 1400,
+        ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
+        messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Ollama Cloud request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+
+    return {
+      text: payload.choices?.[0]?.message?.content ?? '',
+      providerId: 'ollama',
+      simulated: false,
+      ...(payload.usage?.prompt_tokens === undefined ? {} : { tokensIn: payload.usage.prompt_tokens }),
+      ...(payload.usage?.completion_tokens === undefined
+        ? {}
+        : { tokensOut: payload.usage.completion_tokens }),
+    };
+  },
+};
+
+const REGISTRY: readonly LlmProvider[] = [
+  anthropicProvider,
+  openAiProvider,
+  ollamaProvider,
+  simulatedProvider,
+];
 
 /** The first available provider. The simulated one is always last and always available. */
 export async function activeProvider(): Promise<LlmProvider> {
