@@ -23,8 +23,7 @@ import { buildDelegationPlan, route } from './router';
 import { compose } from './compose';
 import { activeProvider } from './providers';
 import { learnFromInteraction } from '@/lib/learning/engine';
-import { detectAct } from './act';
-import { proposeCore } from './tools/propose';
+import { describeLoop, runActLoop } from './loop';
 
 /**
  * Assemble the context a target is allowed to see.
@@ -150,23 +149,13 @@ export async function ask(
 
   const actLines: string[] = [];
   if (actScope && actScope.kind !== 'shared') {
-    const decision = await detectAct(prompt, {
+    const loop = await runActLoop(prompt, {
       scope: actScope,
       provider,
       now,
       ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
     });
-    if (decision.note) actLines.push(decision.note);
-    for (const planned of decision.calls) {
-      const outcome = await proposeCore(actScope, planned.toolId, planned.args, { now });
-      if (outcome.awaitingApproval) {
-        actLines.push(`Queued for your approval: ${outcome.preview} Decide it under Approvals.`);
-      } else if (outcome.ok) {
-        actLines.push(`Done: ${outcome.summary}`);
-      } else {
-        actLines.push(`Could not ${outcome.toolLabel.toLowerCase()}: ${outcome.summary}`);
-      }
-    }
+    actLines.push(...describeLoop(loop));
   }
 
   const plan = buildDelegationPlan({
