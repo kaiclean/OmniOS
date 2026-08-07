@@ -30,6 +30,13 @@ export default async function OsLayout({ children }: { children: React.ReactNode
 
   const companyNames = Object.fromEntries(workspace.companies.map((c) => [c.id, c.name]));
 
+  // Counted from the spaces already loaded for the rail rather than by re-reading
+  // every scope file: the shell renders on every navigation.
+  const approvalsWaiting = spaces.reduce(
+    (sum, space) => sum + space.data.toolCalls.filter((call) => call.status === 'awaiting-approval').length,
+    0,
+  );
+
   return (
     <ShellFrame
       commands={commands}
@@ -38,6 +45,7 @@ export default async function OsLayout({ children }: { children: React.ReactNode
           spaces={spaces}
           openSuggestions={snapshot.openSuggestions}
           upgradesAwaiting={snapshot.upgradesAwaiting}
+          approvalsWaiting={approvalsWaiting}
         />
       }
       strip={<Strip snapshot={snapshot} />}

@@ -4,8 +4,10 @@ import { capabilitiesFor, capabilityLabel } from '@/lib/capabilities/registry';
 import { ownedBy, panel } from '@/lib/capabilities/panels';
 import { loadCompanySpace } from '@/lib/data/space';
 import { formatDurationMinutes, formatMinorAmount, pluralise } from '@/lib/format';
-import { Badge, PageHead, SectionHead } from '@/components/ui/primitives';
+import { Badge, PageHead, Panel, SectionHead } from '@/components/ui/primitives';
 import { CapabilityPanels } from '@/components/panels/CapabilityPanels';
+import { LaunchProgram } from '@/components/company/LaunchProgram';
+import { inferBusinessModel } from '@/lib/business/playbook';
 
 /**
  * The Executive Overview.
@@ -33,6 +35,10 @@ export default async function CompanyOverviewPage({
   const blocked = data.tasks.filter((t) => t.status === 'blocked').length;
   const armed = data.automations.filter((a) => a.status === 'armed');
   const savedMinutes = armed.reduce((s, a) => s + a.minutesSavedPerRun * a.runsThisMonth, 0);
+  // The founder's own words about the business model decide which programme is
+  // offered first. It is a suggestion on a radio group, never a lock-in.
+  const suggestedModel = inferBusinessModel(company.dna.businessModel, company.industry);
+
   const actuals = data.finance.filter((e) => e.confidence !== 'forecast');
   const revenue = actuals.filter((e) => e.direction === 'in').reduce((s, e) => s + e.amount.amount, 0);
   const costs = actuals.filter((e) => e.direction === 'out').reduce((s, e) => s + e.amount.amount, 0);
@@ -90,6 +96,22 @@ export default async function CompanyOverviewPage({
           basePath,
         }}
       />
+
+      <SectionHead title="Launch programme" />
+      <div className="grid">
+        <Panel
+          span={12}
+          title={`Take ${company.name} from nothing to something a stranger can buy from`}
+          subtitle="The strategy, the numbers, the roadmap and the risks are written here and now. Everything that reaches the outside world is prepared and queued for you."
+          footer="Running this twice produces the same plan, not a reshuffle — and the records it writes are ordinary records you can edit or delete."
+        >
+          <LaunchProgram
+            companyId={company.id}
+            suggestedModel={suggestedModel}
+            currency={company.baseCurrency}
+          />
+        </Panel>
+      </div>
 
       <SectionHead title="Capabilities" />
       <div className="capability-grid">
