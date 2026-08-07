@@ -29,6 +29,7 @@ import 'server-only';
 
 import type { LlmProvider, Scope } from '@/lib/domain';
 import { detectAct, type PlannedCall } from './act';
+import { availableTools } from './available';
 import { proposeCore } from './tools/propose';
 
 /**
@@ -70,6 +71,11 @@ export async function runActLoop(
   const observations: string[] = [];
   let note: string | undefined;
 
+  // Resolved once per turn rather than per round: a connection cannot appear
+  // mid-turn, and re-probing the workspace between rounds would make the tools
+  // the planner sees depend on how long it had been thinking.
+  const tools = await availableTools(options.scope);
+
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
     // The prompt grows with what has been learned. The planner sees the founder's
     // original words every round — a summary of a summary is how intent drifts.
@@ -82,6 +88,7 @@ export async function runActLoop(
       scope: options.scope,
       provider: options.provider,
       now: options.now,
+      tools,
       ...(options.preferCapabilityId ? { preferCapabilityId: options.preferCapabilityId } : {}),
     });
 

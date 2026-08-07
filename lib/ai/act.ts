@@ -14,6 +14,7 @@ import 'server-only';
  */
 
 import type { LlmProvider, LlmToolSchema, Scope, ToolDefinition } from '@/lib/domain';
+import { parseMcpToolId } from '@/lib/domain';
 import { scoreTools, toolsForScope } from './tools';
 
 export interface PlannedCall {
@@ -26,6 +27,57 @@ export interface ActDecision {
   readonly calls: readonly PlannedCall[];
   /** Set when the founder clearly wanted an action the local path cannot parse. */
   readonly note?: string;
+}
+
+/**
+ * A provider-legal function name for a tool.
+ *
+ * Both the Anthropic and OpenAI tool APIs constrain a function name to
+ * `^[a-zA-Z0-9_-]{1,64}$`, and a bridged connection tool's id is
+ * `mcp:<server>:<tool>` — colons and all. So every remote tool was offered to
+ * the model under a name the wire format does not permit, and the model could
+ * not call any of them. Fourteen filesystem tools sat connected, correctly
+ * tiered and completely unreachable: asked to read a file, the assistant
+ * searched its own records instead and reported it had no way.
+ *
+ * The mapping is one-way, so callers must resolve the model's answer through
+ * {@link toolCatalogue} rather than reversing this by hand.
+ */
+export function schemaName(toolId: string): string {
+  return toolId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 64);
+}
+
+/** FNV-1a, matching `makeRecordId`'s family, so a collision suffix is stable. */
+function shortHash(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(36).slice(0, 6);
+}
+
+export interface ToolCatalogue {
+  readonly schemas: readonly LlmToolSchema[];
+  /** Wire name → tool id. A name absent from this map is dropped, never guessed. */
+  readonly byName: ReadonlyMap<string, string>;
+}
+
+export function toolCatalogue(tools: readonly ToolDefinition[]): ToolCatalogue {
+  const schemas: LlmToolSchema[] = [];
+  const byName = new Map<string, string>();
+  for (const tool of tools) {
+    let name = schemaName(tool.id);
+    if (byName.has(name)) {
+      // Two ids can sanitise to the same name. Disambiguate deterministically
+      // rather than letting the later one shadow the earlier — silently routing
+      // a call to the wrong tool is the worst failure available here.
+      name = `${name.slice(0, 57)}_${shortHash(tool.id)}`;
+    }
+    byName.set(name, tool.id);
+    schemas.push({ ...toolJsonSchema(tool), name });
+  }
+  return { schemas, byName };
 }
 
 /** A ToolDefinition's params, as the JSON Schema function-calling expects. */
@@ -45,6 +97,26 @@ export function toolJsonSchema(tool: ToolDefinition): LlmToolSchema {
     description: tool.description,
     parameters: { type: 'object', properties, ...(required.length ? { required } : {}) },
   };
+}
+
+/**
+ * A ceiling, not a filter.
+ *
+ * High enough that the whole built-in registry plus a typical connection always
+ * fits — truncation silently removes abilities, and the failure is invisible:
+ * a tool sliced off the end is a tool the model cannot call and cannot report
+ * missing. A tighter cap once dropped `delete_record` and turned "the loop halts
+ * on a gated call" from a safety property into a passing test that proved
+ * nothing. It exists only so a server advertising hundreds of tools cannot make
+ * one request unbounded.
+ */
+const SHORTLIST_MAX = 64;
+
+function shortlistBand(
+  tools: readonly ToolDefinition[],
+  keep: (tool: ToolDefinition) => boolean,
+): ToolDefinition[] {
+  return tools.filter(keep);
 }
 
 /** Verbs that signal the founder wants something done, not described. */
@@ -115,10 +187,14 @@ export function detectActLocally(prompt: string, scope: Scope | null, now: Date,
 
 const ACT_SYSTEM = `You translate a founder's instruction into tool calls inside their operating system, or decide none is wanted.
 
+You are called repeatedly. What you plan runs, and you are asked again with the results, so you do not have to solve everything in one step — find out, then act on what you found.
+
 Rules that are not yours to bend:
-- Plan a call only when the founder clearly asked for something to be done. A question gets no calls.
-- Use only the offered tools and only arguments the founder actually stated or that follow trivially (like "tomorrow" as a date). Never invent titles, amounts, dates or names.
-- At most 3 calls. When unsure, plan nothing — the founder would rather repeat themselves than undo you.`;
+- Plan a call only when the founder clearly asked for something to be done. A question about their records is still something to be done: look it up rather than guessing.
+- Reading is free. A tool that only reads changes nothing and needs no permission, so prefer looking over asking the founder to repeat themselves. If you do not know a path, an id or a filename, use a read tool to find it before giving up.
+- Anything that writes, deletes or leaves this machine is different: use only arguments the founder actually stated or that follow trivially, like "tomorrow" as a date. Never invent a title, an amount, a date, a recipient or a name.
+- At most 3 calls per step. When unsure about a write, plan nothing and say so — the founder would rather repeat themselves than undo you. When unsure about a read, just read.`;
+
 
 export async function detectAct(
   prompt: string,
@@ -127,6 +203,16 @@ export async function detectAct(
     readonly provider: LlmProvider;
     readonly now: Date;
     readonly preferCapabilityId?: string;
+    /**
+     * The tools genuinely available for this call, built-in *and* bridged from
+     * connections. Passed in rather than derived, because `toolsForScope` knows
+     * only the static registry — a connected MCP server's tools live on the
+     * workspace, and a planner that cannot see them will confidently tell the
+     * founder it has no way to read their files while a filesystem server sits
+     * connected two feet away. Defaults to the built-ins so existing callers and
+     * the tests keep their old behaviour.
+     */
+    readonly tools?: readonly ToolDefinition[];
   },
 ): Promise<ActDecision> {
   const { scope, provider, now, preferCapabilityId } = options;
@@ -143,7 +229,7 @@ export async function detectAct(
   // "is the auditor tracked?" matched nothing, so the model was never asked, and
   // the assistant answered from whatever happened to be pre-loaded rather than
   // looking. A read changes nothing, so offering it costs nothing.
-  const available = scope ? toolsForScope(scope) : [];
+  const available = options.tools ?? (scope ? toolsForScope(scope) : []);
   if (available.length === 0) return { mode: 'answer', calls: [] };
 
   const rank = new Map(
@@ -151,32 +237,59 @@ export async function detectAct(
       (entry, index) => [entry.tool.id, index],
     ),
   );
-  // Ordered by score, but never truncated. Scoring is a good hint and a bad
-  // filter: a model asked to plan "…and if not add it" needs `create_task` in
-  // front of it, and no keyword in that clause surfaces it. Verified against the
-  // live model with the full set — thirty schemas plan correctly, so the only
-  // thing truncation bought was the assistant being unable to do things.
-  const shortlist = [...available].sort(
-    (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+  // Three bands, then a cap. Scored tools first — the keyword matcher is a good
+  // hint. Then every connection tool, ahead of the unscored built-ins, because a
+  // bridged tool's match phrases are only its own name and its server's, so it
+  // scores zero however relevant it is. Offered forty-six tools with fourteen
+  // filesystem ones sorted last, the model read straight past them and searched
+  // the workspace six times instead. Unscored built-ins fill whatever is left.
+  const scoredTools = shortlistBand(available, (tool) => rank.has(tool.id));
+  const remoteTools = shortlistBand(available, (tool) => !rank.has(tool.id) && tool.id.startsWith('mcp:'));
+  const restTools = shortlistBand(
+    available,
+    (tool) => !rank.has(tool.id) && !tool.id.startsWith('mcp:'),
   );
+  scoredTools.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+
+  const shortlist = [...scoredTools, ...remoteTools, ...restTools].slice(0, SHORTLIST_MAX);
+  const catalogue = toolCatalogue(shortlist);
+
+  // Naming the connections explicitly, because ordering alone does not surface
+  // them: bridged tools score near zero (their match phrases are just the tool
+  // and server names), so they sort behind thirty built-ins and the model reads
+  // straight past them. Offered fourteen filesystem tools among forty-six, it
+  // searched the workspace six times and reported it had no way to read a file
+  // — the tools were there and it never saw them.
+  const connections = [
+    ...new Set(
+      shortlist
+        .map((tool) => parseMcpToolId(tool.id)?.serverId)
+        .filter((id): id is string => id !== undefined),
+    ),
+  ];
+  const connectionLine =
+    connections.length > 0
+      ? `\n\nConnected servers you can reach, beyond this workspace: ${connections.join(', ')}. Their tools are named mcp_<server>_<tool>. When the founder mentions a file, a page, a repository or anything that lives outside their OmniOS records, use those — and if you do not know a path or an id, call a listing or search tool on that server first.`
+      : '';
 
   try {
     const response = await provider.completeWithTools(
       {
         messages: [
-          { role: 'system', content: ACT_SYSTEM },
+          { role: 'system', content: `${ACT_SYSTEM}${connectionLine}` },
           { role: 'user', content: `Today is ${now.toISOString().slice(0, 10)}. The founder said: "${prompt.trim()}"` },
         ],
         maxTokens: 600,
       },
-      shortlist.map(toolJsonSchema),
+      catalogue.schemas,
     );
 
-    const allowed = new Set(shortlist.map((tool) => tool.id));
     const calls = response.calls
-      .filter((call) => allowed.has(call.name))
-      .slice(0, 3)
-      .map((call) => ({ toolId: call.name, args: call.args }));
+      .map((call) => ({ toolId: catalogue.byName.get(call.name), args: call.args }))
+      .filter((call): call is { toolId: string; args: Readonly<Record<string, unknown>> } =>
+        call.toolId !== undefined,
+      )
+      .slice(0, 3);
 
     return calls.length > 0 ? { mode: 'act', calls } : { mode: 'answer', calls: [] };
   } catch {
