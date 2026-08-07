@@ -749,6 +749,14 @@ const resetCapabilityData: ToolExecutor = async (ctx, args) => {
  * decrypt a credential. The tools exist so the approval path is real: the gate,
  * the preview, the recorded decision and the refusal are all exercised end to end.
  */
+/**
+ * Tools that exist to prove the gate and refuse to act.
+ *
+ * Exported so the assistant can be told not to offer them. A capability the
+ * system lists but cannot perform is worse than one it never mentions.
+ */
+export const NOT_WIRED_TOOL_IDS = ['send_email', 'publish_post', 'call_webhook'] as const;
+
 function notWired(what: string, provider: string): ToolExecutor {
   return async () => ({
     ok: false,
