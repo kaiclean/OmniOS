@@ -71,6 +71,11 @@ export default async function SettingsPage() {
               id: capability.id,
               label: capability.name,
             }))}
+            providers={providers.map((provider) => ({
+              id: provider.id,
+              label: provider.label,
+              available: provider.available,
+            }))}
           />
         </Panel>
 

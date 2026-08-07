@@ -101,13 +101,33 @@ async function readVault(): Promise<SecretVaultFile> {
   }
 }
 
+/**
+ * One promise chain for the vault file — the same guard `fs-store.ts` puts on a
+ * scope file, and load-bearing here in a way that is easy to miss.
+ *
+ * `revealSecret` *writes* on every read, to bump `lastUsedAt`. So two concurrent
+ * reads are two concurrent writes, both to `secrets.json.<pid>.tmp` — one temp
+ * name, one process. Whichever renamed first won and the other threw ENOENT on
+ * `chmod`. `apiKey()` swallows that, so the symptom was the assistant reporting
+ * no API key on a workspace that had one, intermittently, under load.
+ */
+let vaultWrites: Promise<unknown> = Promise.resolve();
+
+function serialiseVaultWrite<T>(work: () => Promise<T>): Promise<T> {
+  const next = vaultWrites.then(work, work);
+  vaultWrites = next.catch(() => undefined);
+  return next;
+}
+
 async function writeVault(file: SecretVaultFile): Promise<void> {
-  const path = vaultPath();
-  await mkdir(dirname(path), { recursive: true });
-  const temp = `${path}.${process.pid}.tmp`;
-  await writeFile(temp, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
-  await chmod(temp, 0o600);
-  await rename(temp, path);
+  await serialiseVaultWrite(async () => {
+    const path = vaultPath();
+    await mkdir(dirname(path), { recursive: true });
+    const temp = `${path}.${process.pid}.tmp`;
+    await writeFile(temp, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    await chmod(temp, 0o600);
+    await rename(temp, path);
+  });
 }
 
 function encrypt(plaintext: string, key: Buffer): Pick<EncryptedSecret, 'cipher' | 'iv' | 'tag'> {
