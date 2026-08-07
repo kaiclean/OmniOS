@@ -20,6 +20,7 @@ import { pageContextLabelParts } from '@/lib/ui/page-context';
 import type { AssistantContext, AssistantTarget, SpaceSlice } from './context';
 import { targetKey } from './context';
 import { buildDelegationPlan, route } from './router';
+import { rosterFor } from './roster';
 import { compose } from './compose';
 import { activeProvider } from './providers';
 import { learnFromInteraction } from '@/lib/learning/engine';
@@ -133,7 +134,11 @@ export async function ask(
   // a company the founder is not currently in never reaches this list, because the
   // slices are the only thing that was read.
   const hints = ctx.slices.flatMap((slice) => slice.data.routingHints);
-  const routing = route(prompt, allowedKinds.length ? allowedKinds : ['personal'], hints);
+  // In a space, that space's own roster routes — including agents the founder
+  // hired there. Founder-wide questions stay with the built-ins: a custom agent
+  // belongs to one scope and must never answer for the others.
+  const roster = target.kind === 'space' ? await rosterFor(target.scope) : undefined;
+  const routing = route(prompt, allowedKinds.length ? allowedKinds : ['personal'], hints, roster);
   const composition = compose(ctx, prompt, routing);
 
   // Acting. The scope a call lands in is decided here — server-side, never by
@@ -287,9 +292,11 @@ export async function ask(
   return { message, plan, run };
 }
 
-/** Conversation history for a target, oldest first. */
+/** Conversation history for a target, oldest first. Direct agent chats stay out. */
 export async function conversation(target: AssistantTarget): Promise<AssistantMessage[]> {
   const scope = target.kind === 'founder' ? personalScope() : target.scope;
   const data = await readScope(scope);
-  return [...data.messages].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  return data.messages
+    .filter((message) => !message.channel)
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }

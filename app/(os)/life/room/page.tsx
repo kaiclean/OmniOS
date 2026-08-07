@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 
-import { SPECIALISTS } from '@/lib/ai/specialists';
+import { rosterFor, rosterNames } from '@/lib/ai/roster';
+import { personalScope } from '@/lib/domain';
 import { loadPersonalSpace } from '@/lib/data/space';
 import { pluralise } from '@/lib/format';
 import { Badge, PageHead, Panel } from '@/components/ui/primitives';
@@ -12,7 +13,7 @@ export const metadata: Metadata = { title: 'Council' };
 export default async function LifeRoomPage() {
   const { personal, data } = await loadPersonalSpace();
   const meetings = [...data.meetings].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  const specialistNames = Object.fromEntries(SPECIALISTS.map((s) => [s.id, s.name]));
+  const specialistNames = rosterNames(await rosterFor(personalScope()));
 
   return (
     <>

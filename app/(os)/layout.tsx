@@ -120,6 +120,14 @@ function buildCommands(
       href: `/companies/${company.id}/dna`,
       icon: 'diamond',
     });
+    commands.push({
+      id: `space:${company.id}:team`,
+      label: `${company.name} · Team`,
+      group: 'Company',
+      href: `/companies/${company.id}/team`,
+      icon: 'users',
+      keywords: 'agents roster hire specialists',
+    });
     for (const capability of capabilitiesFor('company')) {
       commands.push({
         id: `space:${company.id}:${capability.id}`,
@@ -137,6 +145,14 @@ function buildCommands(
     group: 'Life',
     href: '/life/dna',
     icon: 'diamond',
+  });
+  commands.push({
+    id: 'life:team',
+    label: `${personalName} · Team`,
+    group: 'Life',
+    href: '/life/team',
+    icon: 'users',
+    keywords: 'agents roster hire coach',
   });
   for (const capability of capabilitiesFor('personal')) {
     commands.push({

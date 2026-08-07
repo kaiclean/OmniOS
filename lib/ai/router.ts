@@ -46,12 +46,13 @@ export function normalise(prompt: string): string {
 export function scoreSpecialists(
   prompt: string,
   allowedKinds: ReadonlyArray<'company' | 'personal'>,
+  roster: readonly SpecialistAgent[] = SPECIALISTS,
 ): RouteScore[] {
   const text = normalise(prompt);
   const words = new Set(text.split(/[^a-z0-9']+/).filter((w) => w && !STOPWORDS.has(w)));
 
   const scores: RouteScore[] = [];
-  for (const specialist of SPECIALISTS) {
+  for (const specialist of roster) {
     if (!specialist.allowedScopeKinds.some((k) => allowedKinds.includes(k))) continue;
 
     let score = 0;
@@ -115,11 +116,12 @@ function candidatesWithHint(
   prompt: string,
   hints: readonly RoutingHint[],
   allowedKinds: ReadonlyArray<'company' | 'personal'>,
+  roster: readonly SpecialistAgent[],
 ): RouteScore[] {
   const match = matchHint(hints, prompt);
   if (!match) return [...keyword];
 
-  const hinted = getSpecialist(match.hint.specialistId);
+  const hinted = roster.find((specialist) => specialist.id === match.hint.specialistId);
   if (!hinted) return [...keyword];
   if (!hinted.allowedScopeKinds.some((kind) => allowedKinds.includes(kind))) return [...keyword];
   if (keyword.some((entry) => entry.specialist.id === hinted.id)) return [...keyword];
@@ -131,12 +133,16 @@ export function route(
   prompt: string,
   allowedKinds: ReadonlyArray<'company' | 'personal'>,
   hints: readonly RoutingHint[] = [],
+  roster: readonly SpecialistAgent[] = SPECIALISTS,
 ): RoutingResult {
-  const keyword = scoreSpecialists(prompt, allowedKinds);
-  const fallback = getSpecialist(FALLBACK_ID);
+  const keyword = scoreSpecialists(prompt, allowedKinds, roster);
+  // The fallback comes from the roster so an overridden Chief of Staff answers
+  // in their overridden voice — and the built-in one steps back in if the
+  // founder switched that override off.
+  const fallback = roster.find((s) => s.id === FALLBACK_ID) ?? getSpecialist(FALLBACK_ID);
   if (!fallback) throw new Error('Chief of Staff specialist is missing from the registry');
 
-  const candidates = candidatesWithHint(keyword, prompt, hints, allowedKinds);
+  const candidates = candidatesWithHint(keyword, prompt, hints, allowedKinds, roster);
   const hinted = scoreWithHints(
     candidates.map((entry) => ({ specialistId: entry.specialist.id, score: entry.score })),
     hints,

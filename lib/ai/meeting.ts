@@ -22,6 +22,7 @@ import { readScope } from '@/lib/data/store';
 import { capabilityIds } from '@/lib/capabilities/registry';
 import type { SpecialistAgent } from '@/lib/domain';
 import { SPECIALISTS, getSpecialist } from './specialists';
+import { rosterFor, rosterNames } from './roster';
 import { activeProvider } from './providers';
 
 /**
@@ -31,9 +32,13 @@ import { activeProvider } from './providers';
  * the chief-of-staff so there is always a voice for sequencing. Capped at five:
  * past that a meeting stops being a discussion and becomes a broadcast.
  */
-export function recommendParticipants(topic: string, spaceKind: 'company' | 'personal'): SpecialistAgent[] {
+export function recommendParticipants(
+  topic: string,
+  spaceKind: 'company' | 'personal',
+  roster: readonly SpecialistAgent[] = SPECIALISTS,
+): SpecialistAgent[] {
   const text = topic.toLowerCase();
-  const scored = SPECIALISTS.filter((s) => s.allowedScopeKinds.includes(spaceKind))
+  const scored = roster.filter((s) => s.allowedScopeKinds.includes(spaceKind))
     .map((specialist) => ({
       specialist,
       score: specialist.matches.reduce((sum, phrase) => (text.includes(phrase) ? sum + 2 : sum), 0),
@@ -41,13 +46,13 @@ export function recommendParticipants(topic: string, spaceKind: 'company' | 'per
     .sort((a, b) => b.score - a.score);
 
   const picked = scored.filter((entry) => entry.score > 0).slice(0, 4).map((entry) => entry.specialist);
-  const chief = getSpecialist('chief-of-staff') ?? scored[0]?.specialist;
+  const chief = roster.find((s) => s.id === 'chief-of-staff') ?? scored[0]?.specialist;
   if (chief && !picked.some((s) => s.id === chief.id)) picked.unshift(chief);
   return picked.slice(0, 5);
 }
 
 /** The slice of the room's records one specialist is entitled to speak from. */
-function briefingFor(specialist: SpecialistAgent, data: ScopeData): string {
+export function briefingFor(specialist: SpecialistAgent, data: ScopeData): string {
   const owned = new Set(specialist.capabilityIds.length ? specialist.capabilityIds : capabilityIds());
   const lines: string[] = [];
 
@@ -66,10 +71,13 @@ function briefingFor(specialist: SpecialistAgent, data: ScopeData): string {
   return lines.length ? lines.join('\n') : 'No records in this specialist’s capabilities yet.';
 }
 
-function transcript(meeting: Meeting, limit = 14): string {
+function transcript(meeting: Meeting, limit = 14, names: Readonly<Record<string, string>> = {}): string {
   return meeting.turns
     .slice(-limit)
-    .map((turn) => `${turn.speakerId === 'founder' ? 'Founder' : (getSpecialist(turn.speakerId)?.name ?? turn.speakerId)}: ${turn.text}`)
+    .map(
+      (turn) =>
+        `${turn.speakerId === 'founder' ? 'Founder' : (names[turn.speakerId] ?? getSpecialist(turn.speakerId)?.name ?? turn.speakerId)}: ${turn.text}`,
+    )
     .join('\n');
 }
 
@@ -81,12 +89,16 @@ export async function specialistTurn(
   founderPrompt: string,
   now: Date,
 ): Promise<MeetingTurn> {
-  const specialist = getSpecialist(specialistId);
+  // The room's roster is the scope's roster: an agent the founder hired here
+  // can be seated and speak; one hired elsewhere does not exist in this room.
+  const roster = await rosterFor(scope);
+  const specialist = roster.find((s) => s.id === specialistId);
   const at = now.toISOString();
   if (!specialist) {
     return { speakerId: specialistId, text: 'That specialist is not on the roster.', at, simulated: true };
   }
 
+  const names = rosterNames(roster);
   const data = await readScope(scope);
   const briefing = briefingFor(specialist, data);
   const provider = await activeProvider();
@@ -109,7 +121,7 @@ ${briefing}`,
             content: `Meeting topic: ${meeting.topic}
 
 Recent discussion:
-${transcript(meeting)}
+${transcript(meeting, 14, names)}
 
 The founder just said: "${founderPrompt}". Respond as ${specialist.name}.`,
           },

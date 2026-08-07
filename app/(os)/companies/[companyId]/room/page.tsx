@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { SPECIALISTS } from '@/lib/ai/specialists';
+import { rosterFor, rosterNames } from '@/lib/ai/roster';
 import { loadCompanySpace } from '@/lib/data/space';
 import { pluralise } from '@/lib/format';
 import { Badge, PageHead, Panel } from '@/components/ui/primitives';
@@ -20,7 +20,7 @@ export default async function CompanyRoomPage({
   const { companyId } = await params;
   const { company, data } = await loadCompanySpace(companyId);
   const meetings = [...data.meetings].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  const specialistNames = Object.fromEntries(SPECIALISTS.map((s) => [s.id, s.name]));
+  const specialistNames = rosterNames(await rosterFor({ kind: 'company', companyId: company.id }));
 
   return (
     <>

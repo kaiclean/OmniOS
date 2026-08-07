@@ -6,6 +6,7 @@ import type { Meeting, MeetingTurn, Scope } from '@/lib/domain';
 import { parseScopeKey } from '@/lib/domain';
 import { insertRecords, readCollection, updateRecord } from '@/lib/data/store';
 import { draftPlan, newMeeting, recommendParticipants, specialistTurn } from '@/lib/ai/meeting';
+import { rosterFor } from '@/lib/ai/roster';
 import { proposeCore } from '@/lib/ai/tools/propose';
 
 /**
@@ -41,6 +42,7 @@ export async function openMeeting(
   const participants = recommendParticipants(
     trimmed,
     scope.kind === 'company' ? 'company' : 'personal',
+    await rosterFor(scope),
   );
   const meeting = newMeeting(scope, trimmed.slice(0, 200), participants.map((s) => s.id), new Date());
   await insertRecords(scope, 'meetings', [meeting]);
