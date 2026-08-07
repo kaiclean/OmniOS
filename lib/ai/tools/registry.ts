@@ -128,6 +128,21 @@ export type DeletableCollection = (typeof DELETABLE_COLLECTIONS)[number];
  * Collections `reset_capability_data` clears, all of which carry a `capabilityId`.
  * `evolution` is deliberately absent for the same reason as above.
  */
+/**
+ * What the assistant may look through.
+ *
+ * Not every collection: `messages` and `agentRuns` are the assistant's own
+ * transcript, and letting it search those turns a question about the founder's
+ * work into a question about itself. `toolCalls` is excluded for the same
+ * reason — the audit trail is for the founder to read, not for the thing being
+ * audited to mine.
+ */
+export const SEARCHABLE_COLLECTIONS = [
+  'tasks', 'goals', 'kpis', 'roadmap', 'automations', 'docs', 'contacts',
+  'finance', 'risks', 'suggestions', 'briefs', 'assets', 'products', 'health',
+  'habits', 'relationships', 'learning', 'lifeAdmin', 'calendar', 'memory',
+] as const;
+
 export const CAPABILITY_SCOPED_COLLECTIONS = [
   'tasks',
   'goals',
@@ -160,6 +175,56 @@ const PERSONAL = ['personal'] as const;
 
 const TOOL_LIST = [
   /* ------------------------------------------------------------ work ------ */
+  {
+    /**
+     * The first read-tier tools, and the reason the assistant was previously
+     * unable to answer anything it had not been handed.
+     *
+     * `loadContext` assembles a fixed slice of the workspace before a turn
+     * starts. Everything outside that slice was unreachable — the assistant
+     * could create a task about a contract it could not look up, and had no way
+     * to check whether one already existed. `read` is an autonomous tier, so
+     * these run without an approval: looking at your own records changes
+     * nothing, and a question that has to be approved is a question nobody asks.
+     */
+    id: 'search_workspace',
+    label: 'Search this space',
+    description:
+      'Find records in this space by text. Use before creating something, to check whether it already exists, and whenever the founder refers to a record that is not already in front of you. Reads only: nothing changes.',
+    risk: 'read',
+    capabilityId: 'operations',
+    scopeKinds: BOTH,
+    matches: ['search for', 'find the', 'look up', 'do i already have', 'is there a', 'what do i have about'],
+    params: [
+      { name: 'query', type: 'string', description: 'Words to look for. Matched against titles, names, labels and body text.', required: true },
+      {
+        name: 'collection',
+        type: 'enum',
+        description: 'Narrow to one kind of record. Omit to search the useful ones.',
+        required: false,
+        enumValues: SEARCHABLE_COLLECTIONS,
+      },
+      { name: 'limit', type: 'number', description: 'How many to return. Defaults to 10.', required: false, default: 10 },
+    ],
+    preview: (args: ToolArgs) =>
+      `Search ${argText(args, 'collection', 'this space')} for ${quoted(args, 'query', 'nothing')}. Reads only; nothing changes.`,
+  },
+  {
+    id: 'get_record',
+    label: 'Open a record',
+    description:
+      'Read one record in full by its id, when a search result or another record referenced it and you need the detail. Reads only: nothing changes.',
+    risk: 'read',
+    capabilityId: 'operations',
+    scopeKinds: BOTH,
+    matches: ['open the record', 'show me the record', 'read the record'],
+    params: [
+      { name: 'collection', type: 'enum', description: 'Which collection the record lives in.', required: true, enumValues: SEARCHABLE_COLLECTIONS },
+      { name: 'recordId', type: 'string', description: 'The id, exactly as a search result gave it.', required: true },
+    ],
+    preview: (args: ToolArgs) =>
+      `Open ${argText(args, 'collection', 'a record')} ${argText(args, 'recordId', EMPTY)} in this space. Reads only; nothing changes.`,
+  },
   {
     id: 'create_task',
     label: 'Create a task',

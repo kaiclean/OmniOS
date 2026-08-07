@@ -1,0 +1,142 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import type { LlmProvider, LlmToolResponse } from '@/lib/domain';
+import { personalScope } from '@/lib/domain';
+
+/**
+ * The acting loop.
+ *
+ * A loop that can act repeatedly is exactly the shape that could route around
+ * the approval gate, so these tests are written against that possibility rather
+ * than against the happy path. The load-bearing one is the third: a gated call
+ * must *stop* the loop, because continuing would mean planning the next step on
+ * the assumption the founder is going to say yes.
+ */
+
+const NOW = new Date('2026-08-07T09:00:00.000Z');
+
+let dir: string;
+let loop: typeof import('@/lib/ai/loop');
+let store: typeof import('@/lib/data/store');
+
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'omnios-loop-'));
+  process.env.OMNIOS_DATA_DIR = dir;
+  loop = await import('@/lib/ai/loop');
+  store = await import('@/lib/data/store');
+  await store.getWorkspace();
+}, 60_000);
+
+afterAll(async () => {
+  await rm(dir, { recursive: true, force: true });
+  delete process.env.OMNIOS_DATA_DIR;
+});
+
+/** A provider that plans a fixed script, one round at a time. */
+function scripted(rounds: ReadonlyArray<ReadonlyArray<{ name: string; args: Record<string, unknown> }>>) {
+  let round = 0;
+  const seen: string[] = [];
+  const provider: LlmProvider = {
+    id: 'scripted',
+    label: 'Scripted',
+    simulated: false,
+    keyName: null,
+    available: async () => true,
+    complete: async () => ({ text: '', providerId: 'scripted', simulated: false }),
+    completeWithTools: async (request): Promise<LlmToolResponse> => {
+      seen.push(request.messages.find((m) => m.role === 'user')?.content ?? '');
+      const calls = rounds[round] ?? [];
+      round += 1;
+      return { text: '', calls: [...calls], simulated: false, providerId: 'scripted' } as unknown as LlmToolResponse;
+    },
+  };
+  return { provider, seen, rounds: () => round };
+}
+
+describe('the loop can find something out and then use it', () => {
+  it('feeds a tool result back into the next round of planning', async () => {
+    const { provider, seen } = scripted([
+      [{ name: 'search_workspace', args: { query: 'auditor' } }],
+      [{ name: 'create_task', args: { title: 'Follow up with the auditor' } }],
+      [],
+    ]);
+
+    const result = await loop.runActLoop('is the auditor tracked, and if not add it', {
+      scope: personalScope(),
+      provider,
+      now: NOW,
+    });
+
+    expect(result.steps.map((s) => s.toolId)).toEqual(['search_workspace', 'create_task']);
+    // The second round must have been able to see what the first returned —
+    // otherwise the loop is just three unrelated single-shot turns.
+    expect(seen[1]).toContain('What you have already done this turn');
+    expect(seen[1]).toContain('search_workspace');
+    // And the founder's own words survive every round rather than being summarised.
+    expect(seen[1]).toContain('is the auditor tracked');
+  }, 30_000);
+
+  it('stops as soon as the planner has nothing left to do', async () => {
+    const { provider, rounds } = scripted([[{ name: 'search_workspace', args: { query: 'nothing' } }], []]);
+    await loop.runActLoop('look something up', { scope: personalScope(), provider, now: NOW });
+    // Two planning calls, not four: an empty plan ends the turn.
+    expect(rounds()).toBe(2);
+  }, 30_000);
+});
+
+describe('the loop cannot outrun the gate', () => {
+  it('halts on a gated call instead of planning past it', async () => {
+    const { provider, rounds } = scripted([
+      [{ name: 'send_email', args: { to: 'x@example.com', subject: 'Hi', body: 'Hello.' } }],
+      [{ name: 'create_task', args: { title: 'Should never be reached' } }],
+    ]);
+
+    const result = await loop.runActLoop('email them and then note it', {
+      scope: personalScope(),
+      provider,
+      now: NOW,
+    });
+
+    expect(result.haltedBecause).toBe('awaiting-approval');
+    expect(result.steps).toHaveLength(1);
+    expect(result.steps[0]?.awaitingApproval).toBe(true);
+    // The planner was never asked for a second round. Continuing would have meant
+    // assuming the founder says yes, which is the decision the gate reserves.
+    expect(rounds()).toBe(1);
+
+    const tasks = await store.readCollection(personalScope(), 'tasks');
+    expect(tasks.some((task) => task.title === 'Should never be reached')).toBe(false);
+  }, 30_000);
+
+  it('says out loud that it stopped, and why', async () => {
+    const result = await loop.runActLoop('delete something', {
+      scope: personalScope(),
+      provider: scripted([[{ name: 'delete_record', args: { collection: 'tasks', recordId: 'nope' } }]]).provider,
+      now: NOW,
+    });
+    expect(loop.describeLoop(result).join(' ')).toContain('I stopped there');
+  }, 30_000);
+});
+
+describe('the loop is bounded', () => {
+  it('gives up after a fixed number of rounds rather than running unattended', async () => {
+    // A planner that never says "done" is the failure mode that costs money and
+    // fills a workspace, so the ceiling is structural rather than advisory.
+    const forever = scripted(
+      Array.from({ length: 20 }, (_, i) => [{ name: 'create_task', args: { title: `Loop task ${i}` } }]),
+    );
+
+    const result = await loop.runActLoop('keep going', {
+      scope: personalScope(),
+      provider: forever.provider,
+      now: NOW,
+    });
+
+    expect(result.haltedBecause).toBe('round-limit');
+    expect(result.steps.length).toBeLessThanOrEqual(8);
+    expect(loop.describeLoop(result).join(' ')).toContain('rather than keep going unattended');
+  }, 60_000);
+});
