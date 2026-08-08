@@ -157,7 +157,9 @@ export function MeetingRoom({
                 onClick={() =>
                   startTransition(async () => {
                     const result = await approveMeetingPlan(scopeKey, active.id);
-                    setError(result.ok ? null : (result.error ?? 'Approval failed.'));
+                    // A queued-at-the-gate notice arrives on a successful
+                    // approval too, and the founder must see it.
+                    setError(result.error ?? (result.ok ? null : 'Approval failed.'));
                   })
                 }
               >

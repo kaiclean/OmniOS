@@ -49,6 +49,14 @@ export interface CustomAgent extends ScopedRecord {
    * than adding a new one.
    */
   readonly overridesBuiltIn: boolean;
+  /**
+   * True only on the record created by switching a built-in off — a pure
+   * toggle carrying nothing the founder authored, so re-enabling may delete it
+   * to let the built-in step back. A customised override never sets this, and
+   * must never be deleted by a toggle: the founder's charter and routing
+   * phrases live on it.
+   */
+  readonly offSwitch?: boolean;
   readonly enabled: boolean;
   readonly createdBy: 'founder' | 'assistant';
 }

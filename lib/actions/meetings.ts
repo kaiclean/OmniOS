@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 
 import type { Meeting, MeetingTurn, Scope } from '@/lib/domain';
 import { parseScopeKey } from '@/lib/domain';
-import { insertRecords, readCollection, updateRecord } from '@/lib/data/store';
-import { draftPlan, newMeeting, recommendParticipants, specialistTurn } from '@/lib/ai/meeting';
+import { insertRecords, mutateScope, readCollection, updateRecord } from '@/lib/data/store';
+import { draftPlan, newMeeting, recommendParticipants, specialistTurn, turnContext } from '@/lib/ai/meeting';
 import { rosterFor } from '@/lib/ai/roster';
 import { proposeCore } from '@/lib/ai/tools/propose';
 
@@ -85,18 +85,30 @@ export async function speakInMeeting(
       ? [addresseeId]
       : meeting.participantIds;
 
+  // One roster/records/provider resolution for the whole round, not one per
+  // seat — five specialists answering must not mean five vault probes.
+  const round = await turnContext(scope);
+
   const replies: MeetingTurn[] = [];
   const withFounder: Meeting = { ...meeting, turns: [...meeting.turns, founderTurn] };
   for (const specialistId of speakers) {
     // Each specialist sees the turns spoken before them, including colleagues in
     // this same round — that is what lets the room actually discuss.
     const visible: Meeting = { ...withFounder, turns: [...withFounder.turns, ...replies] };
-    replies.push(await specialistTurn(visible, scope, specialistId, trimmed, new Date()));
+    replies.push(await specialistTurn(visible, scope, specialistId, trimmed, new Date(), round));
   }
 
-  await updateRecord(scope, 'meetings', meetingId, {
-    turns: [...meeting.turns, founderTurn, ...replies],
-  });
+  // Appended against the record as it is *now*, not as it was before the model
+  // calls: a round takes seconds, and a snapshot write would erase any turn
+  // that landed from another tab in between.
+  await mutateScope(scope, (data) => ({
+    ...data,
+    meetings: data.meetings.map((record) =>
+      record.id === meetingId
+        ? { ...record, turns: [...record.turns, founderTurn, ...replies], updatedAt: new Date().toISOString() }
+        : record,
+    ),
+  }));
   revalidatePath('/', 'layout');
   return { ok: true };
 }
@@ -110,6 +122,13 @@ export async function draftMeetingPlan(
   const meeting = await findMeeting(scope, meetingId);
   if (!meeting) return { ok: false, error: 'That meeting is not in this space.' };
   if (meeting.turns.length === 0) return { ok: false, error: 'Nothing has been discussed yet.' };
+  // An approved plan carries the ids of the tasks it created; re-drafting would
+  // sever those links and re-approving would create every task twice. A closed
+  // meeting is closed. Only a live discussion (or an unapproved draft the
+  // founder sent back) may be drafted.
+  if (meeting.stage === 'executing' || meeting.stage === 'closed') {
+    return { ok: false, error: `The meeting is ${meeting.stage} — its plan is part of the record now.` };
+  }
 
   const plan = await draftPlan(meeting, new Date());
   await updateRecord(scope, 'meetings', meetingId, { plan, stage: 'plan-ready' });
@@ -125,18 +144,22 @@ export async function draftMeetingPlan(
 export async function approveMeetingPlan(
   scopeKeyInput: string,
   meetingId: string,
-): Promise<{ ok: boolean; created: number; error?: string }> {
+): Promise<{ ok: boolean; created: number; queued: number; error?: string }> {
   const scope = resolveScope(scopeKeyInput);
-  if (!scope) return { ok: false, created: 0, error: 'No such space.' };
+  if (!scope) return { ok: false, created: 0, queued: 0, error: 'No such space.' };
   const meeting = await findMeeting(scope, meetingId);
-  if (!meeting?.plan) return { ok: false, created: 0, error: 'There is no plan to approve.' };
+  if (!meeting?.plan) return { ok: false, created: 0, queued: 0, error: 'There is no plan to approve.' };
   if (meeting.stage !== 'plan-ready') {
-    return { ok: false, created: 0, error: `The meeting is ${meeting.stage}, not awaiting approval.` };
+    return { ok: false, created: 0, queued: 0, error: `The meeting is ${meeting.stage}, not awaiting approval.` };
   }
 
   const now = new Date();
   const tasksWithIds = [];
+  // "Created" means a record exists. A call the gate held (confirm-writes mode
+  // queues even task creation) is queued, not created — reporting it as done
+  // would be the system lying about its own state.
   let created = 0;
+  let queued = 0;
   for (const task of meeting.plan.tasks) {
     const outcome = await proposeCore(scope, 'create_task', {
       title: task.title,
@@ -144,7 +167,8 @@ export async function approveMeetingPlan(
       status: 'next',
       notes: `From the meeting “${meeting.topic}” — owner: ${task.ownerSpecialistId}.`,
     }, { now });
-    if (outcome.ok) created += 1;
+    if (outcome.awaitingApproval) queued += 1;
+    else if (outcome.ok) created += 1;
     tasksWithIds.push({ ...task, ...(outcome.affectedIds?.[0] ? { taskId: outcome.affectedIds[0] } : {}) });
   }
 
@@ -154,7 +178,14 @@ export async function approveMeetingPlan(
     plan: { ...meeting.plan, tasks: tasksWithIds },
   });
   revalidatePath('/', 'layout');
-  return { ok: true, created };
+  return {
+    ok: true,
+    created,
+    queued,
+    ...(queued > 0
+      ? { error: `${queued} of the plan's tasks stopped at the gate — decide them under Approvals.` }
+      : {}),
+  };
 }
 
 export async function closeMeeting(scopeKeyInput: string, meetingId: string): Promise<void> {

@@ -29,7 +29,7 @@ function catalogState(
   if (entry.category === 'ai' && !entry.presetId) {
     const providerId =
       entry.id === 'ollama-cloud' ? 'ollama' : entry.id === 'anthropic' ? 'anthropic' : 'openai';
-    return providers.find((p) => p.id === providerId)?.available ? 'connected' : 'needs-server';
+    return providers.find((p) => p.id === providerId)?.available ? 'connected' : 'needs-key';
   }
   const server = entry.presetId
     ? workspace.mcpServers.find(
@@ -221,7 +221,7 @@ export default async function ConnectionsPage() {
                         </div>
                         <div className="list-secondary">
                           {entry.unlocks}{' '}
-                          {state === 'needs-server' || state === 'one-click' ? entry.how : ''}
+                          {state === 'needs-server' || state === 'one-click' || state === 'needs-key' ? entry.how : ''}
                         </div>
                       </div>
                     </div>

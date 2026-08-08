@@ -237,7 +237,9 @@ export function setupProgress(
       id: 'agent',
       label: 'Hire an agent',
       detail: 'Grow one space’s roster with a preset or an agent you invent.',
-      done: spaces.some((space) => space.data.customAgents.length > 0),
+      // Switching a built-in off also writes a customAgents record; that is
+      // not a hire, and this meter must never congratulate something undone.
+      done: spaces.some((space) => space.data.customAgents.some((agent) => !agent.offSwitch)),
       href: teamHref,
     },
     {
@@ -311,6 +313,12 @@ export interface TimelineFilter {
   readonly kinds?: readonly TimelineKind[];
   readonly spaceKey?: string;
   readonly limit?: number;
+  /**
+   * Fold read-only calls away *before* the limit is applied — a digest that
+   * filtered after limiting could be emptied entirely by one lookup-heavy
+   * stretch, hiding the very writes it exists to surface.
+   */
+  readonly excludeReadOnly?: boolean;
 }
 
 /**
@@ -390,12 +398,19 @@ export function buildTimeline(
         tone: meeting.stage === 'plan-ready' ? 'pending' : 'neutral',
       });
       if (meeting.approvedAt && meeting.plan) {
+        // Only tasks that actually got a record count as created — a task the
+        // gate held has no id yet and saying otherwise would be the timeline
+        // inventing history.
+        const materialised = meeting.plan.tasks.filter((task) => task.taskId).length;
         events.push({
           id: `meeting-approved:${meeting.id}`,
           at: meeting.approvedAt,
           kind: 'decision',
           title: `Plan approved — “${meeting.topic}”`,
-          detail: `${meeting.plan.tasks.length} tasks created through the gate`,
+          detail:
+            materialised === meeting.plan.tasks.length
+              ? `${materialised} tasks created through the gate`
+              : `${materialised} of ${meeting.plan.tasks.length} tasks created — the rest wait at the gate`,
           spaceLabel: label,
           spaceKey: key,
           href: roomHref,
@@ -527,7 +542,8 @@ export function buildTimeline(
   const wanted = events.filter(
     (event) =>
       (!kinds || kinds.length === 0 || kinds.includes(event.kind)) &&
-      (!filter.spaceKey || event.spaceKey === filter.spaceKey),
+      (!filter.spaceKey || event.spaceKey === filter.spaceKey) &&
+      (!filter.excludeReadOnly || !event.readOnly),
   );
   // Newest first; the id tie-break keeps the order stable when timestamps collide.
   wanted.sort((a, b) => (a.at === b.at ? (a.id < b.id ? 1 : -1) : a.at < b.at ? 1 : -1));

@@ -42,10 +42,11 @@ export default async function MissionControlPage() {
   const liveConnections = workspace.mcpStates.filter((state) => state.status === 'connected');
 
   const decisionsWaiting = pendingCalls.length + upgradesAwaiting.length + planReady.length;
+  // Newest decision first, whatever space it queued in — the pane exists to
+  // surface the urgent one, not the one from whichever space lists first.
+  pendingCalls.sort((a, b) => (a.item.at < b.item.at ? 1 : a.item.at > b.item.at ? -1 : 0));
   // Reads stay on the full timeline; the digest shows what changed or waits.
-  const recent = buildTimeline(spaces, workspace, { limit: 80 })
-    .filter((event) => !event.readOnly)
-    .slice(0, 14);
+  const recent = buildTimeline(spaces, workspace, { limit: 14, excludeReadOnly: true });
 
   return (
     <>

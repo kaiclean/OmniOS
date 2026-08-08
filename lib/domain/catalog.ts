@@ -86,6 +86,9 @@ export const CONNECTOR_STATES = [
   'error',
   'one-click',
   'needs-server',
+  // AI providers connect with a vault key, not a server — labelling them
+  // 'needs an MCP server' sent founders hunting for one that does not exist.
+  'needs-key',
 ] as const;
 export type ConnectorState = (typeof CONNECTOR_STATES)[number];
 
@@ -95,4 +98,5 @@ export const CONNECTOR_STATE_LABELS: Record<ConnectorState, string> = {
   error: 'Configured · failing',
   'one-click': 'Preset available',
   'needs-server': 'Needs an MCP server',
+  'needs-key': 'Needs a key in the vault',
 };

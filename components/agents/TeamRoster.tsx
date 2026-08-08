@@ -250,7 +250,10 @@ function CustomAgentForm({
           })}
         </div>
         <div className="spread">
-          <span className="hint">It reads only the capabilities you tick, in this space only.</span>
+          <span className="hint">
+            Its briefings draw on the capabilities you tick, in this space only. Anything it does
+            goes through the same approval gate as everything else.
+          </span>
           <button className="btn btn--primary" type="submit" disabled={pending || name.trim().length < 3}>
             {pending ? 'Hiring…' : 'Hire agent'}
           </button>

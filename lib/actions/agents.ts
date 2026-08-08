@@ -158,9 +158,11 @@ export async function setAgentEnabled(
   const stored = existing.find((agent) => agent.id === agentId);
 
   if (stored) {
-    // Re-enabling a pure off-switch removes it so the built-in steps back in;
-    // everything else just flips the flag.
-    if (enabled && stored.overridesBuiltIn && !stored.presetId) {
+    // Only the explicit off-switch marker permits deletion: it is the one
+    // record that carries nothing the founder authored. Everything else —
+    // including a customised override that happens to share a built-in's id —
+    // keeps its record and just flips the flag.
+    if (enabled && stored.offSwitch) {
       await removeRecord(scope, 'customAgents', agentId);
     } else {
       await updateRecord(scope, 'customAgents', agentId, { enabled });
@@ -191,6 +193,7 @@ export async function setAgentEnabled(
     allowedScopeKinds: builtIn.allowedScopeKinds,
     wouldDo: builtIn.wouldDo,
     overridesBuiltIn: true,
+    offSwitch: true,
     enabled: false,
     createdBy: 'founder',
   };
@@ -222,7 +225,7 @@ export async function speakToAgent(
   const messages = await readCollection(scope, 'messages');
   const history = messages
     .filter((message) => message.channel === channel)
-    .sort((a, b) => (a.at < b.at ? -1 : 1));
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 
   const now = new Date();
   const at = now.toISOString();
@@ -242,11 +245,13 @@ export async function speakToAgent(
   // The agent can find things out and do things, through exactly the loop the
   // assistant uses: reads run, writes run, anything gated queues for the
   // founder and halts the loop. Hiring changed who speaks, never what may run.
-  const loop = await runActLoop(trimmed, { scope, provider: await activeProvider(), now });
+  const provider = await activeProvider();
+  const loop = await runActLoop(trimmed, { scope, provider, now });
   const actLines = describeLoop(loop);
   const activity = loop.steps.map((step) => `- ${step.toolId}: ${step.summary}`).join('\n');
 
   const reply = await directAgentReply(scope, specialist, history, trimmed, {
+    provider,
     ...(activity ? { activity } : {}),
   });
   const replyAt = new Date().toISOString();

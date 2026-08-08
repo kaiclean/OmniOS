@@ -82,7 +82,7 @@ describe('the timeline', () => {
       stage: 'closed',
       participantIds: ['chief-of-staff', 'engineer'],
       turns: [],
-      plan: { summary: 's', decisions: [], tasks: [{ title: 't', capabilityId: 'projects', ownerSpecialistId: 'engineer' }], risks: [], simulated: false },
+      plan: { summary: 's', decisions: [], tasks: [{ title: 't', capabilityId: 'projects', ownerSpecialistId: 'engineer', taskId: 'task-1' }], risks: [], simulated: false },
       approvedAt: '2026-08-07T09:30:00.000Z',
       closedAt: '2026-08-07T09:40:00.000Z',
     };
