@@ -28,17 +28,32 @@ function cached<T>(key: string, make: () => T): T {
 const formatter = (key: string, make: () => Intl.NumberFormat): Intl.NumberFormat =>
   cached(`n:${key}`, make);
 
+/**
+ * Pin the Swiss grouping apostrophe to ASCII, whatever ICU ships.
+ *
+ * Node 24's CLDR data renders the en-CH group separator as the typographic
+ * apostrophe (U+2019) where earlier versions produced the ASCII one (U+0027) —
+ * so every money figure in the product changed glyph because the runtime
+ * upgraded. A founder's numbers must be byte-stable across deploys: diffs,
+ * copy-paste into a spreadsheet, and string-matching tests all break when a
+ * separator drifts. One choice, pinned here, and the tests enforce it.
+ */
+const SWISS_APOSTROPHE = /’/g;
+const stable = (formatted: string): string => formatted.replace(SWISS_APOSTROPHE, "'");
+
 const dateFormatter = (key: string, make: () => Intl.DateTimeFormat): Intl.DateTimeFormat =>
   cached(`d:${key}`, make);
 
 export function formatNumber(value: number | null | undefined, decimals = 0): string {
   if (value === null || value === undefined || Number.isNaN(value)) return EMPTY;
-  return formatter(`n:${decimals}`, () =>
-    new Intl.NumberFormat('en-CH', {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    }),
-  ).format(value);
+  return stable(
+    formatter(`n:${decimals}`, () =>
+      new Intl.NumberFormat('en-CH', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      }),
+    ).format(value),
+  );
 }
 
 export function formatMoney(
@@ -49,12 +64,14 @@ export function formatMoney(
   const units = CURRENCY_MINOR_UNITS[money.currency] ?? 100;
   const major = money.amount / units;
   const { compact = false, showCurrency = true } = options;
-  const body = formatter(`m:${compact}`, () =>
-    new Intl.NumberFormat('en-CH', {
-      notation: compact ? 'compact' : 'standard',
-      maximumFractionDigits: compact ? 1 : 0,
-    }),
-  ).format(major);
+  const body = stable(
+    formatter(`m:${compact}`, () =>
+      new Intl.NumberFormat('en-CH', {
+        notation: compact ? 'compact' : 'standard',
+        maximumFractionDigits: compact ? 1 : 0,
+      }),
+    ).format(major),
+  );
   return showCurrency ? `${money.currency} ${body}` : body;
 }
 
