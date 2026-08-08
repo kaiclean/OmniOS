@@ -28,6 +28,7 @@ import type { LoopResult } from './loop';
 import { describeLoop, runActLoop } from './loop';
 import { availableTools } from './available';
 import { describeSelf } from './self';
+import { recallMemory } from './recall';
 import { NOT_WIRED_TOOL_IDS } from './tools/executors';
 
 /**
@@ -91,7 +92,12 @@ export async function loadContext(target: AssistantTarget, now = new Date()): Pr
   };
 }
 
-function systemPrompt(tone: AssistantTone, locationLine: string | null, self: string): string {
+function systemPrompt(
+  tone: AssistantTone,
+  locationLine: string | null,
+  recalled: string,
+  self: string,
+): string {
   return [
     `You are the Executive Assistant inside OmniOS, an operating system a founder runs their companies and their private life from.`,
     '',
@@ -103,6 +109,7 @@ function systemPrompt(tone: AssistantTone, locationLine: string | null, self: st
     ...(locationLine ? ['', locationLine] : []),
     '',
     `Keep any figures exactly as given.`,
+    ...(recalled ? ['', recalled] : []),
     '',
     self,
   ].join('\n');
@@ -170,6 +177,25 @@ export async function ask(
     actLines.push(...describeLoop(loopResult));
   }
 
+  /**
+   * What this question needs from memory, ranked — not the first few records
+   * that happened to load. `recallMemory` scores relevance against the founder's
+   * actual words, so a question about runway surfaces the runway preference
+   * rather than whichever memory sorted first.
+   */
+  const recalledHits = await recallMemory({
+    scope: actScope && actScope.kind !== 'shared' ? actScope : personalScope(),
+    text: prompt,
+    limit: 5,
+    now,
+  });
+  const recalled =
+    recalledHits.length > 0
+      ? `What you know about this founder that bears on this question, most relevant first. Use it to shape the reply; never state it back as a finding:\n${recalledHits
+          .map((hit) => `- ${hit.record.text}`)
+          .join('\n')}`
+      : '';
+
   const plan = buildDelegationPlan({
     prompt,
     routing,
@@ -211,6 +237,7 @@ export async function ask(
               // Built-in *and* bridged: the answering half must know exactly
               // what the planning half can reach, or it disclaims abilities the
               // loop just used.
+              recalled,
               describeSelf({
                 // Founder mode has no single acting scope, but it is not
                 // powerless — it is the surface where "what can you do?" is most
