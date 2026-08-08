@@ -17,6 +17,12 @@ export const PAGE_KINDS = [
   'space-overview',
   'capability',
   'dna',
+  // The meeting room and the roster. Before these existed here, the URL parser
+  // fell through to the capability branch and told the assistant the founder
+  // was looking at a capability called "room" — which the server then silently
+  // discarded while the UI displayed it.
+  'room',
+  'team',
   'settings',
   'connections',
   'approvals',
@@ -83,12 +89,17 @@ export function derivePageContext(pathname: string): PageContext {
     const spaceKey = `company:${segments[1]}`;
     if (!segments[2]) return { pathname: clean, spaceKey, pageKind: 'space-overview' };
     if (segments[2] === 'dna') return { pathname: clean, spaceKey, pageKind: 'dna' };
+    if (segments[2] === 'room') return { pathname: clean, spaceKey, pageKind: 'room' };
+    // Covers /team and /team/<agentId>: either way the founder is with the roster.
+    if (segments[2] === 'team') return { pathname: clean, spaceKey, pageKind: 'team' };
     return { pathname: clean, spaceKey, capabilityId: segments[2], pageKind: 'capability' };
   }
 
   if (segments[0] === 'life') {
     if (!segments[1]) return { pathname: clean, spaceKey: 'personal', pageKind: 'space-overview' };
     if (segments[1] === 'dna') return { pathname: clean, spaceKey: 'personal', pageKind: 'dna' };
+    if (segments[1] === 'room') return { pathname: clean, spaceKey: 'personal', pageKind: 'room' };
+    if (segments[1] === 'team') return { pathname: clean, spaceKey: 'personal', pageKind: 'team' };
     return {
       pathname: clean,
       spaceKey: 'personal',
@@ -159,6 +170,8 @@ const PAGE_KIND_LABELS: Record<PageKind, string> = {
   finance: 'Finance Center',
   'companies-index': 'Companies',
   'company-new': 'New company',
+  room: 'Team Room',
+  team: 'Team',
   'capability-global': 'Capability',
   unknown: 'OmniOS',
 };

@@ -91,15 +91,63 @@ export interface RecallOptions {
   readonly now?: Date;
 }
 
+/**
+ * Recall for the founder surface, which owns several spaces at once.
+ *
+ * The first wiring recalled from `personalScope()` whenever there was no single
+ * acting scope — so on `/assistant` and every OS-level page, a question about a
+ * company could not surface that company's memories. Same failure shape as the
+ * `describeSelf` bug: founder mode has no one scope, and the cheap default
+ * quietly narrowed it to one anyway.
+ *
+ * This follows the pattern `loadContext` already set: founder mode reads every
+ * space the founder owns, **each by name** — there is still no `readEverything()`
+ * and a company scope still never reaches another company through here. Scores
+ * are comparable across spaces because every space is ranked by the same
+ * function, and each hit carries its space's label so the prompt can say where
+ * a memory came from rather than presenting Meridian's rule as a personal one.
+ */
+export interface SpaceRecallSource {
+  readonly scope: Scope;
+  readonly label: string;
+}
+
+export interface RecalledAcrossSpaces extends RecalledMemory {
+  readonly spaceLabel: string;
+}
+
+export async function recallAcrossSpaces(
+  sources: readonly SpaceRecallSource[],
+  options: Omit<RecallOptions, 'scope'>,
+): Promise<RecalledAcrossSpaces[]> {
+  const limit = Math.min(Math.max(options.limit ?? 8, 1), 40);
+  const perSpace = await Promise.all(
+    sources.map(async (source) => {
+      const hits = await recallMemory({ ...options, scope: source.scope, limit });
+      return hits.map((hit) => ({ ...hit, spaceLabel: source.label }));
+    }),
+  );
+  return perSpace
+    .flat()
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
 export async function recallMemory(options: RecallOptions): Promise<RecalledMemory[]> {
   const now = options.now ?? new Date();
   const limit = Math.min(Math.max(options.limit ?? 8, 1), 40);
 
   // One scope. The caller's scope, never a union of them.
   const all = await readCollection(options.scope, 'memory');
-  const candidates = options.capabilityId
+  const filtered = options.capabilityId
     ? all.filter((record) => record.capabilityId === options.capabilityId)
     : all;
+  // Scoring is O(candidates × terms), fine for years of normal use and unbounded
+  // is unbounded. The store keeps collections newest-first, so capping keeps the
+  // recent thousand — the ones recency weighting would favour anyway — and a
+  // memory older than that cutoff is reachable through search_workspace rather
+  // than silently lost.
+  const candidates = filtered.slice(0, 1000);
   if (candidates.length === 0) return [];
 
   const stored = candidates.map((record) => record.embedding);

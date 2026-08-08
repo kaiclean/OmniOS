@@ -66,10 +66,6 @@ export async function proposeToolCall(
   };
 }
 
-async function findCall(scope: Scope, toolCallId: string): Promise<ToolCall | undefined> {
-  const calls = await readCollection(scope, 'toolCalls');
-  return calls.find((call) => call.id === toolCallId);
-}
 
 /**
  * The founder answering in the app.

@@ -81,7 +81,8 @@ export async function rejectToolCallAs(
     decidedAt: new Date().toISOString(),
     decidedBy,
     // Kept, not deleted: a rejected proposal is evidence about what the system
-    // tried to do, and the learning engine reads exactly this to stop suggesting it.
+    // tried to do. The timeline projects it, decision and all — and a learning
+    // pass that wants to stop suggesting rejected things would read it here.
     result: 'Rejected. Nothing ran.',
   });
   return true;

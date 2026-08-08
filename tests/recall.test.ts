@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { cosineSimilarity } from '@/lib/ai/embeddings';
-import { personalScope } from '@/lib/domain';
+import { companyScope, personalScope } from '@/lib/domain';
 
 /**
  * Retrieval.
@@ -108,4 +108,39 @@ describe('cosine similarity is safe to sort by', () => {
       expect(cosineSimilarity(a, b)).toBe(0);
     }
   });
+});
+
+describe('the founder surface recalls across every owned space', () => {
+  /**
+   * The first wiring recalled from personal whenever there was no single acting
+   * scope — so on /assistant and every OS-level page, a question about a company
+   * could never surface that company's memories. Same failure shape as the
+   * describeSelf bug: founder mode has no one scope, and the cheap default
+   * narrowed it to one anyway.
+   */
+  it('surfaces a company memory the personal space does not hold', async () => {
+    const co = companyScope('acme');
+    await store.insertRecords(co, 'memory', [
+      { ...memory('co1', 'Acme invoices go out on the 25th, never month-end.'), scope: co },
+    ] as never);
+
+    const hits = await recall.recallAcrossSpaces(
+      [
+        { scope: co, label: 'Acme' },
+        { scope: personalScope(), label: 'Kai' },
+      ],
+      { text: 'when do invoices go out?', now: NOW },
+    );
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits[0]?.record.text).toContain('invoices');
+    // Labelled with its origin, so the prompt never presents Acme's rule as personal.
+    expect(hits[0]?.spaceLabel).toBe('Acme');
+  }, 30_000);
+
+  it('space mode still reads exactly one space', async () => {
+    // The founder surface widening must not leak back: personal recall alone
+    // never sees the company record.
+    const hits = await recall.recallMemory({ scope: personalScope(), text: 'when do invoices go out?', now: NOW });
+    expect(hits.every((hit) => !hit.record.text.includes('Acme'))).toBe(true);
+  }, 30_000);
 });
