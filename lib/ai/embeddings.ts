@@ -59,6 +59,10 @@ const openAiEmbeddings: EmbeddingProvider = {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({ model: this.model, input: [...texts] }),
+      // Embedding rides inside a `remember` write and inside a turn. A hung
+      // provider must cost seconds and fall back to lexical, never stall the
+      // write — the same rule the Telegram client follows for the same reason.
+      signal: AbortSignal.timeout(4_000),
     });
     if (!response.ok) {
       throw new Error(`Embedding request failed: ${response.status} ${response.statusText}`);
@@ -88,6 +92,7 @@ const ollamaEmbeddings: EmbeddingProvider = {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
       body: JSON.stringify({ model: this.model, input: [...texts] }),
+      signal: AbortSignal.timeout(4_000),
     });
     if (!response.ok) {
       throw new Error(`Embedding request failed: ${response.status} ${response.statusText}`);
