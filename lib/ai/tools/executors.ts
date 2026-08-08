@@ -101,6 +101,7 @@ import { generateCompanyWorkspace } from '@/lib/generation/company-hq';
 import { getPreset } from '@/lib/ai/agent-presets';
 import { newMeeting, recommendParticipants } from '@/lib/ai/meeting';
 import { rosterFor } from '@/lib/ai/roster';
+import { embedTexts } from '@/lib/ai/embeddings';
 import { callMcpTool } from '@/lib/mcp/client';
 import { mcpToolDefinition } from './mcp-bridge';
 import { capabilitiesFor, getCapability } from '@/lib/capabilities/registry';
@@ -534,6 +535,13 @@ const createBrief: ToolExecutor = async (ctx, args) => {
 const remember: ToolExecutor = async (ctx, args) => {
   const text = argText(args, 'text');
   const strength = argNumber(args, 'strength');
+  // Embedded on write, when a provider exists. Doing it here rather than in a
+  // batch job means a memory is retrievable the moment it is made, and a
+  // workspace with no embedding key simply stores none — `recallMemory` ranks
+  // lexically until every record has one, so there is no half-migrated state
+  // where some records are findable and others silently are not.
+  const vector = (await embedTexts([text]))?.vectors[0];
+
   const record: MemoryRecord = {
     ...base(ctx, 'mem', text),
     kind: enumArg(args, 'kind', MEMORY_KINDS, 'fact'),
@@ -543,6 +551,7 @@ const remember: ToolExecutor = async (ctx, args) => {
     tags: listArg(args, 'tags'),
     source: 'assistant',
     useCount: 0,
+    ...(vector ? { embedding: vector } : {}),
   };
   // Written into this scope only. Reaching shared capability memory needs
   // promoteMemory and the gate it runs — never a tool call.
