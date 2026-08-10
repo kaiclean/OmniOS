@@ -5,7 +5,8 @@ import { revalidatePath } from 'next/cache';
 import type { AssistantMessage } from '@/lib/domain';
 import { parseScopeKey } from '@/lib/domain';
 import type { AssistantTarget } from '@/lib/ai/context';
-import { ask, conversation } from '@/lib/ai/assistant';
+import type { ThreadSummary } from '@/lib/ai/assistant';
+import { ask, conversation, listThreads } from '@/lib/ai/assistant';
 import { activeProvider } from '@/lib/ai/providers';
 import { getCapability } from '@/lib/capabilities/registry';
 import { derivePageContext } from '@/lib/ui/page-context';
@@ -43,10 +44,16 @@ function resolveTarget(targetKey: string, pathname?: string): AssistantTarget {
   return { kind: 'space', scope, ...(checked ? { page: checked } : {}) };
 }
 
+/** A channel from the browser is either absent or a well-formed thread id. */
+function sanitiseChannel(channel?: string): string | undefined {
+  return channel && /^thread:[a-z0-9-]{4,40}$/.test(channel) ? channel : undefined;
+}
+
 export async function askAssistant(
   targetKey: string,
   prompt: string,
   pathname?: string,
+  channel?: string,
 ): Promise<AssistantTurn> {
   const trimmed = prompt.trim();
   if (!trimmed) return { ok: false, error: 'Say something first.' };
@@ -69,7 +76,13 @@ export async function askAssistant(
   }
 
   try {
-    const { message } = await ask(resolveTarget(targetKey, pathname), trimmed);
+    const thread = sanitiseChannel(channel);
+    const { message } = await ask(
+      resolveTarget(targetKey, pathname),
+      trimmed,
+      new Date(),
+      thread ? { channel: thread } : {},
+    );
     revalidatePath('/', 'layout');
     return { ok: true, message };
   } catch (error) {
@@ -80,8 +93,15 @@ export async function askAssistant(
   }
 }
 
-export async function loadConversation(targetKey: string): Promise<AssistantMessage[]> {
-  return conversation(resolveTarget(targetKey));
+export async function loadConversation(
+  targetKey: string,
+  channel?: string,
+): Promise<AssistantMessage[]> {
+  return conversation(resolveTarget(targetKey), sanitiseChannel(channel));
+}
+
+export async function loadThreads(targetKey: string): Promise<ThreadSummary[]> {
+  return listThreads(resolveTarget(targetKey));
 }
 
 export async function providerLabel(): Promise<{ label: string; simulated: boolean }> {

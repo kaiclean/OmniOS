@@ -15,10 +15,12 @@ export const metadata: Metadata = { title: 'Timeline' };
  * client state: the URL is the filter, so any view of the history can be
  * shared, bookmarked or reloaded and stay exactly what it was.
  */
+const PAGE_SIZE = 120;
+
 export default async function TimelinePage({
   searchParams,
 }: {
-  searchParams: Promise<{ kind?: string; space?: string }>;
+  searchParams: Promise<{ kind?: string; space?: string; before?: string }>;
 }) {
   const params = await searchParams;
   const [workspace, spaces] = await Promise.all([getWorkspace(), loadSpaces()]);
@@ -26,18 +28,25 @@ export default async function TimelinePage({
   const kind = TIMELINE_KINDS.find((candidate) => candidate === params.kind);
   const spaceKeys = ['os', ...spaces.map((space) => space.scopeKey)];
   const spaceKey = spaceKeys.find((candidate) => candidate === params.space);
+  // Accepted only if it parses as an instant — the cursor comes from a URL.
+  const before =
+    params.before && !Number.isNaN(Date.parse(params.before)) ? params.before : undefined;
 
   const events = buildTimeline(spaces, workspace, {
+    limit: PAGE_SIZE,
     ...(kind ? { kinds: [kind] } : {}),
     ...(spaceKey ? { spaceKey } : {}),
+    ...(before ? { before } : {}),
   });
+  const oldest = events[events.length - 1];
 
-  const hrefFor = (next: { kind?: TimelineKind; space?: string }) => {
+  const hrefFor = (next: { kind?: TimelineKind; space?: string; before?: string }) => {
     const query = new URLSearchParams();
     const wantKind = 'kind' in next ? next.kind : kind;
     const wantSpace = 'space' in next ? next.space : spaceKey;
     if (wantKind) query.set('kind', wantKind);
     if (wantSpace) query.set('space', wantSpace);
+    if (next.before) query.set('before', next.before);
     const suffix = query.toString();
     return suffix ? `/timeline?${suffix}` : '/timeline';
   };
@@ -100,6 +109,13 @@ export default async function TimelinePage({
           footer="Rejections, failures and revocations stay. What the system tried to do is part of the record."
         >
           <TimelineList events={events} groupByDay />
+          {events.length === PAGE_SIZE && oldest ? (
+            <div className="panel-body">
+              <Link className="btn btn--secondary btn--sm" href={hrefFor({ before: oldest.at })}>
+                Older events
+              </Link>
+            </div>
+          ) : null}
         </Panel>
       </div>
     </>

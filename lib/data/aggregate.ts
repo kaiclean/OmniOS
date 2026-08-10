@@ -321,6 +321,8 @@ export interface TimelineFilter {
    * stretch, hiding the very writes it exists to surface.
    */
   readonly excludeReadOnly?: boolean;
+  /** Only events strictly older than this instant — how the trail pages back. */
+  readonly before?: Timestamp;
 }
 
 /**
@@ -545,7 +547,8 @@ export function buildTimeline(
     (event) =>
       (!kinds || kinds.length === 0 || kinds.includes(event.kind)) &&
       (!filter.spaceKey || event.spaceKey === filter.spaceKey) &&
-      (!filter.excludeReadOnly || !event.readOnly),
+      (!filter.excludeReadOnly || !event.readOnly) &&
+      (!filter.before || event.at < filter.before),
   );
   // Newest first; the id tie-break keeps the order stable when timestamps collide.
   wanted.sort((a, b) => (a.at === b.at ? (a.id < b.id ? 1 : -1) : a.at < b.at ? 1 : -1));

@@ -251,8 +251,8 @@ function CustomAgentForm({
         </div>
         <div className="spread">
           <span className="hint">
-            Its briefings draw on the capabilities you tick, in this space only. Anything it does
-            goes through the same approval gate as everything else.
+            Its briefings and its tools are limited to the capabilities you tick, in this space
+            only — a tool outside them is never even offered. Anything gated still stops for you.
           </span>
           <button className="btn btn--primary" type="submit" disabled={pending || name.trim().length < 3}>
             {pending ? 'Hiring…' : 'Hire agent'}

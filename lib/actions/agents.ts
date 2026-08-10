@@ -245,9 +245,10 @@ export async function speakToAgent(
   // The agent can find things out and do things, through exactly the loop the
   // assistant uses: reads run, writes run, anything gated queues for the
   // founder and halts the loop. Hiring changed who speaks, never what may run.
-  const provider = await activeProvider();
+  //
   // The agent acts as itself, not as the founder's assistant: its own charter
   // decides what it may reach. Subtractive only — it can never exceed the space.
+  const provider = await activeProvider();
   const loop = await runActLoop(trimmed, { scope, provider, now, agent: specialist });
   const actLines = describeLoop(loop);
   const activity = loop.steps.map((step) => `- ${step.toolId}: ${step.summary}`).join('\n');

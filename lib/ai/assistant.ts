@@ -9,8 +9,8 @@
 
 import 'server-only';
 
-import type { AgentRun, AssistantMessage, DelegationPlan, MemoryRecord } from '@/lib/domain';
-import { makeRecordId, parseScopeKey, personalScope, scopeKey, sharedScope } from '@/lib/domain';
+import type { AgentRun, AssistantMessage, DelegationPlan, MemoryRecord, SpecialistAgent } from '@/lib/domain';
+import { agentIdFrom, makeRecordId, parseScopeKey, personalScope, scopeKey, sharedScope } from '@/lib/domain';
 import type { Scope } from '@/lib/domain';
 import { getWorkspace, insertRecords, readScope } from '@/lib/data/store';
 import { capabilityIds, getCapability } from '@/lib/capabilities/registry';
@@ -20,7 +20,10 @@ import { pageContextLabelParts } from '@/lib/ui/page-context';
 import type { AssistantContext, AssistantTarget, SpaceSlice } from './context';
 import { targetKey } from './context';
 import { buildDelegationPlan, route } from './router';
+import { SLASH_COMMANDS } from './commands';
+import { SPECIALISTS } from './specialists';
 import { rosterFor } from './roster';
+import { proposeCore } from './tools/propose';
 import { compose } from './compose';
 import { activeProvider } from './providers';
 import { learnFromInteraction } from '@/lib/learning/engine';
@@ -133,10 +136,46 @@ export interface AskResult {
   readonly run: AgentRun;
 }
 
+/**
+ * "@engineer how risky is this migration" — the founder names the voice.
+ *
+ * A mention only re-weights who *answers*; it grants nothing. The named
+ * specialist must already be on the roster this target may use, and an unknown
+ * slug is left in the text rather than guessed at.
+ */
+function parseMention(
+  prompt: string,
+  roster: readonly SpecialistAgent[],
+): { specialist: SpecialistAgent; rest: string } | null {
+  const match = /^@([a-z0-9][a-z0-9-]*)\s+(.+)$/s.exec(prompt.trim());
+  if (!match?.[1] || !match[2]) return null;
+  const slug = match[1];
+  const specialist = roster.find(
+    (candidate) => candidate.id === slug || agentIdFrom(candidate.name) === slug,
+  );
+  return specialist ? { specialist, rest: match[2].trim() } : null;
+}
+
+/**
+ * Slash commands are the deterministic fast path: no model, no routing
+ * ambiguity — "/task Buy the domain" is exactly one proposal, validated and
+ * gated like anything else. The registry lives in `./commands` so the composer
+ * lists exactly what the server parses.
+ */
+function parseSlashCommand(prompt: string): { toolId: string; args: Record<string, string>; label: string } | null {
+  const match = /^\/([a-z]+)\s+(.+)$/s.exec(prompt.trim());
+  if (!match?.[1] || !match[2]) return null;
+  const entry = SLASH_COMMANDS.find((candidate) => candidate.command === match[1]);
+  return entry
+    ? { toolId: entry.toolId, args: { [entry.argName]: match[2].trim() }, label: entry.command }
+    : null;
+}
+
 export async function ask(
   target: AssistantTarget,
   prompt: string,
   now = new Date(),
+  options: { readonly channel?: string } = {},
 ): Promise<AskResult> {
   const startedAt = now.toISOString();
   const ctx = await loadContext(target, now);
@@ -150,8 +189,28 @@ export async function ask(
   // hired there. Founder-wide questions stay with the built-ins: a custom agent
   // belongs to one scope and must never answer for the others.
   const roster = target.kind === 'space' ? await rosterFor(target.scope) : undefined;
-  const routing = route(prompt, allowedKinds.length ? allowedKinds : ['personal'], hints, roster);
-  const composition = compose(ctx, prompt, routing);
+
+  // "@name …" and "/command …" are resolved before anything else reads the
+  // text: routing, composition and the act loop all see the cleaned sentence,
+  // while the stored founder message keeps the original words.
+  const mention = parseMention(prompt, roster ?? SPECIALISTS);
+  const slash = mention ? null : parseSlashCommand(prompt);
+  const spoken = mention ? mention.rest : prompt;
+
+  let routing = route(spoken, allowedKinds.length ? allowedKinds : ['personal'], hints, roster);
+  if (mention) {
+    const supporting = [routing.lead, ...routing.supporting]
+      .filter((candidate) => candidate.id !== mention.specialist.id)
+      .slice(0, 2);
+    routing = {
+      ...routing,
+      lead: mention.specialist,
+      supporting,
+      // Being told beats being inferred — same ceiling an exact hint gets.
+      confidence: Math.max(routing.confidence, 0.9),
+    };
+  }
+  const composition = compose(ctx, spoken, routing);
 
   // Acting. The scope a call lands in is decided here — server-side, never by
   // the model: space mode acts in that space; founder mode acts in the space of
@@ -168,13 +227,27 @@ export async function ask(
   const actLines: string[] = [];
   let loopResult: LoopResult | undefined;
   if (actScope && actScope.kind !== 'shared') {
-    loopResult = await runActLoop(prompt, {
-      scope: actScope,
-      provider,
-      now,
-      ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
-    });
-    actLines.push(...describeLoop(loopResult));
+    if (slash) {
+      // The deterministic path: one named tool, one proposal, the same gate.
+      const outcome = await proposeCore(actScope, slash.toolId, slash.args, { now });
+      actLines.push(
+        outcome.awaitingApproval
+          ? `Queued for your approval: ${outcome.preview} Decide it under Approvals.`
+          : outcome.ok
+            ? `Done: ${outcome.summary}`
+            : `Could not /${slash.label}: ${outcome.summary}`,
+      );
+    } else {
+      loopResult = await runActLoop(spoken, {
+        scope: actScope,
+        provider,
+        now,
+        ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
+      });
+      actLines.push(...describeLoop(loopResult));
+    }
+  } else if (slash) {
+    actLines.push('A /command acts inside a space — open a company or your life first.');
   }
 
   /**
@@ -215,7 +288,7 @@ export async function ask(
       : '';
 
   const plan = buildDelegationPlan({
-    prompt,
+    prompt: spoken,
     routing,
     contextUsed: composition.references,
     summary: composition.summary,
@@ -276,7 +349,7 @@ export async function ask(
           },
           {
             role: 'user',
-            content: `The founder asked: "${prompt}"\n\nAnalysis computed from their records:\n\n${composition.body}${loopFindings}\n\nWrite the reply.`,
+            content: `The founder asked: "${spoken}"\n\nAnalysis computed from their records:\n\n${composition.body}${loopFindings}\n\nWrite the reply.`,
           },
         ],
       });
@@ -311,6 +384,7 @@ export async function ask(
     plan,
     simulated,
     providerId: provider.id,
+    ...(options.channel ? { channel: options.channel } : {}),
   };
 
   const founderMessage: AssistantMessage = {
@@ -323,6 +397,7 @@ export async function ask(
     at: startedAt,
     simulated: false,
     providerId: provider.id,
+    ...(options.channel ? { channel: options.channel } : {}),
   };
 
   const run: AgentRun = {
@@ -370,11 +445,59 @@ export async function ask(
   return { message, plan, run };
 }
 
-/** Conversation history for a target, oldest first. Direct agent chats stay out. */
-export async function conversation(target: AssistantTarget): Promise<AssistantMessage[]> {
+/**
+ * Conversation history for a target, oldest first. No channel = the main
+ * thread; a `thread:` channel = one named conversation. Direct agent chats
+ * live on `agent:` channels and never appear here.
+ */
+export async function conversation(
+  target: AssistantTarget,
+  channel?: string,
+): Promise<AssistantMessage[]> {
   const scope = target.kind === 'founder' ? personalScope() : target.scope;
   const data = await readScope(scope);
   return data.messages
-    .filter((message) => !message.channel)
+    .filter((message) => (channel ? message.channel === channel : !message.channel))
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+export interface ThreadSummary {
+  readonly channel: string;
+  readonly title: string;
+  readonly at: string;
+  readonly count: number;
+}
+
+/**
+ * The named conversations a target has, newest first — derived entirely from
+ * the messages themselves. A conversation has no record of its own: its title
+ * is its first question, its age is its last message, and deleting its
+ * messages deletes it. Nothing to rename, nothing to drift.
+ */
+export async function listThreads(target: AssistantTarget): Promise<ThreadSummary[]> {
+  const scope = target.kind === 'founder' ? personalScope() : target.scope;
+  const data = await readScope(scope);
+  const byChannel = new Map<string, { first?: AssistantMessage; last?: AssistantMessage; count: number }>();
+
+  for (const message of data.messages) {
+    if (!message.channel?.startsWith('thread:')) continue;
+    const entry = byChannel.get(message.channel) ?? { count: 0 };
+    entry.count += 1;
+    if (!entry.first || message.at < entry.first.at) entry.first = message;
+    if (!entry.last || message.at > entry.last.at) entry.last = message;
+    byChannel.set(message.channel, entry);
+  }
+
+  return [...byChannel.entries()]
+    .map(([channel, entry]) => {
+      const opening =
+        entry.first?.role === 'founder' ? entry.first.text : (entry.first?.text ?? 'Conversation');
+      return {
+        channel,
+        title: opening.length > 60 ? `${opening.slice(0, 60)}…` : opening,
+        at: entry.last?.at ?? '',
+        count: entry.count,
+      };
+    })
+    .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }

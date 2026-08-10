@@ -92,6 +92,8 @@ function buildCommands(
     { id: 'finance', label: 'Finance Center', group: 'Systems', href: '/finance', icon: 'coins', keywords: 'money cash revenue' },
     { id: 'automations', label: 'Automation Platform', group: 'Systems', href: '/automations', icon: 'bolt', keywords: 'workflow trigger' },
     { id: 'settings', label: 'Settings', group: 'OS', href: '/settings', icon: 'settings', keywords: 'theme data reset' },
+    { id: 'security', label: 'Security Center', group: 'OS', href: '/security', icon: 'shield', keywords: 'gate approvals grants vault trust audit deciders' },
+    { id: 'help', label: 'How OmniOS works', group: 'OS', href: '/help', icon: 'book', keywords: 'help glossary guide explain mental model' },
   ];
 
   for (const capability of CAPABILITIES) {

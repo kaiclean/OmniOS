@@ -27,7 +27,7 @@ import 'server-only';
  * something and then use it.
  */
 
-import type { LlmProvider, Scope } from '@/lib/domain';
+import type { LlmProvider, Scope, ToolDefinition } from '@/lib/domain';
 import { detectAct, type PlannedCall } from './act';
 import { availableTools, toolsForAgent } from './available';
 import { proposeCore } from './tools/propose';
