@@ -4,8 +4,10 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 
 import type { AssistantMessage } from '@/lib/domain';
-import { askAssistant } from '@/lib/actions/assistant';
-import { specialistName } from '@/lib/ai/specialists';
+import { askAssistant, loadConversation, loadThreads } from '@/lib/actions/assistant';
+import type { ThreadSummary } from '@/lib/ai/assistant';
+import { SLASH_COMMANDS } from '@/lib/ai/commands';
+import { SPECIALISTS, specialistName } from '@/lib/ai/specialists';
 import { getCapability } from '@/lib/capabilities/registry';
 import { derivePageContext, pageContextLabelParts, targetKeyForPage } from '@/lib/ui/page-context';
 import { Icon } from '@/components/ui/Icon';
@@ -46,6 +48,10 @@ export function Copilot({
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // '' is the main thread; 'thread:<id>' is a named conversation. Threads are
+  // derived server-side from the messages themselves — nothing here to sync.
+  const [channel, setChannel] = useState('');
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scopeLabel = useMemo(() => {
@@ -85,7 +91,7 @@ export function Copilot({
     setError(null);
     setDraft('');
     startTransition(async () => {
-      const result = await askAssistant(targetKey, trimmed, pathname);
+      const result = await askAssistant(targetKey, trimmed, pathname, channel || undefined);
       const reply = result.message;
       if (!result.ok || !reply) {
         setError(result.error ?? 'That did not work.');
@@ -103,6 +109,45 @@ export function Copilot({
     });
   };
 
+  const switchThread = (next: string) => {
+    if (next === channel || pending) return;
+    setChannel(next);
+    setError(null);
+    startTransition(async () => {
+      setMessages(await loadConversation(targetKey, next || undefined));
+    });
+  };
+
+  const newThread = () => {
+    // A fresh channel id; the thread only exists once something is said in it.
+    const id = `thread:${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+    setChannel(id);
+    setMessages([]);
+    setError(null);
+  };
+
+  const refreshThreads = () => {
+    startTransition(async () => {
+      setThreads(await loadThreads(targetKey));
+    });
+  };
+
+  // "@eng…" → matching roster names; "/…" → the command registry. Both are
+  // hints over what the server parses, never a second execution path.
+  const mentionHints = useMemo(() => {
+    const match = /^@([a-z0-9-]*)$/i.exec(draft.trim());
+    if (!match) return [];
+    const partial = (match[1] ?? '').toLowerCase();
+    return SPECIALISTS.filter(
+      (s) => s.id.startsWith(partial) || s.name.toLowerCase().startsWith(partial),
+    ).slice(0, 5);
+  }, [draft]);
+  const slashHints = useMemo(() => {
+    const match = /^\/([a-z]*)$/.exec(draft.trim());
+    if (!match) return [];
+    return SLASH_COMMANDS.filter((c) => c.command.startsWith(match[1] ?? '')).slice(0, 4);
+  }, [draft]);
+
   return (
     <aside className="copilot" aria-label="Executive Assistant">
       <header className="copilot-head">
@@ -115,6 +160,35 @@ export function Copilot({
             <span className="badge badge--outline">{scopeLabel}</span>
           </div>
         </div>
+        <select
+          className="select"
+          style={{ maxWidth: '11rem', fontSize: 'var(--fs-small)' }}
+          aria-label="Conversation"
+          value={channel}
+          disabled={pending}
+          onFocus={refreshThreads}
+          onChange={(event) => switchThread(event.target.value)}
+        >
+          <option value="">Main thread</option>
+          {channel && !threads.some((thread) => thread.channel === channel) ? (
+            <option value={channel}>New conversation</option>
+          ) : null}
+          {threads.map((thread) => (
+            <option key={thread.channel} value={thread.channel}>
+              {thread.title}
+            </option>
+          ))}
+        </select>
+        <button
+          className="btn btn--ghost btn--icon btn--sm"
+          type="button"
+          aria-label="New conversation"
+          title="New conversation"
+          disabled={pending}
+          onClick={newThread}
+        >
+          <Icon name="plus" size={13} />
+        </button>
       </header>
 
       <div className="copilot-scroll" ref={scrollRef}>
@@ -166,6 +240,35 @@ export function Copilot({
           <span className="hint" aria-label="Assistant context">
             {contextParts.join(' / ')}
           </span>
+          {mentionHints.length > 0 ? (
+            <div className="row wrap" style={{ gap: 'var(--s-1)' }}>
+              {mentionHints.map((specialist) => (
+                <button
+                  key={specialist.id}
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => setDraft(`@${specialist.id} `)}
+                >
+                  @{specialist.id}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {slashHints.length > 0 ? (
+            <div className="stack" style={{ gap: 'var(--s-1)' }}>
+              {slashHints.map((command) => (
+                <button
+                  key={command.command}
+                  type="button"
+                  className="palette-item"
+                  onClick={() => setDraft(`/${command.command} `)}
+                >
+                  <Icon name="chevron-right" />
+                  <span className="hint">{command.hint}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <textarea
             data-copilot-input
             className="textarea"

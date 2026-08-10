@@ -27,7 +27,7 @@ import 'server-only';
  * something and then use it.
  */
 
-import type { LlmProvider, Scope } from '@/lib/domain';
+import type { LlmProvider, Scope, ToolDefinition } from '@/lib/domain';
 import { detectAct, type PlannedCall } from './act';
 import { availableTools } from './available';
 import { proposeCore } from './tools/propose';
@@ -65,6 +65,15 @@ export async function runActLoop(
     readonly provider: LlmProvider;
     readonly now: Date;
     readonly preferCapabilityId?: string;
+    /**
+     * Narrows what this loop may even plan. A hired agent's loop passes its
+     * capability filter here, which makes the Team page's promise structural:
+     * a tool outside the filter is not offered, and a model that names one
+     * anyway is dropped by name resolution — never "allowed this once".
+     * The filter can only ever narrow `availableTools`; there is no widening
+     * counterpart, by design.
+     */
+    readonly toolFilter?: (tool: ToolDefinition) => boolean;
   },
 ): Promise<LoopResult> {
   const steps: LoopStep[] = [];
@@ -74,7 +83,8 @@ export async function runActLoop(
   // Resolved once per turn rather than per round: a connection cannot appear
   // mid-turn, and re-probing the workspace between rounds would make the tools
   // the planner sees depend on how long it had been thinking.
-  const tools = await availableTools(options.scope);
+  const all = await availableTools(options.scope);
+  const tools = options.toolFilter ? all.filter(options.toolFilter) : all;
 
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
     // The prompt grows with what has been learned. The planner sees the founder's
