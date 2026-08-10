@@ -31,6 +31,7 @@ import type { LoopResult } from './loop';
 import { describeLoop, runActLoop } from './loop';
 import { availableTools } from './available';
 import { describeSelf } from './self';
+import { recallAcrossSpaces, type SpaceRecallSource } from './recall';
 import { NOT_WIRED_TOOL_IDS } from './tools/executors';
 
 /**
@@ -94,7 +95,12 @@ export async function loadContext(target: AssistantTarget, now = new Date()): Pr
   };
 }
 
-function systemPrompt(tone: AssistantTone, locationLine: string | null, self: string): string {
+function systemPrompt(
+  tone: AssistantTone,
+  locationLine: string | null,
+  recalled: string,
+  self: string,
+): string {
   return [
     `You are the Executive Assistant inside OmniOS, an operating system a founder runs their companies and their private life from.`,
     '',
@@ -106,6 +112,7 @@ function systemPrompt(tone: AssistantTone, locationLine: string | null, self: st
     ...(locationLine ? ['', locationLine] : []),
     '',
     `Keep any figures exactly as given.`,
+    ...(recalled ? ['', recalled] : []),
     '',
     self,
   ].join('\n');
@@ -243,6 +250,43 @@ export async function ask(
     actLines.push('A /command acts inside a space — open a company or your life first.');
   }
 
+  /**
+   * What this question needs from memory, ranked — not the first few records
+   * that happened to load. In a space, that space's memory answers. On the
+   * founder surface there is no single space, so recall walks every space the
+   * founder owns — the same set, in the same way, as `loadContext` above — and
+   * labels each hit with where it came from. Recalling only from personal here
+   * was the `describeSelf` bug in another coat: a question about a company on
+   * an OS-level page could never surface that company's memories.
+   */
+  const recallSources: SpaceRecallSource[] =
+    actScope && actScope.kind !== 'shared'
+      ? [
+          {
+            scope: actScope,
+            label:
+              actScope.kind === 'company'
+                ? (ctx.companies.find((c) => c.id === actScope.companyId)?.name ?? actScope.companyId)
+                : ctx.personal.displayName,
+          },
+        ]
+      : [
+          ...ctx.companies
+            .filter((company) => !company.archivedAt)
+            .map((company) => ({
+              scope: { kind: 'company' as const, companyId: company.id },
+              label: company.name,
+            })),
+          { scope: personalScope(), label: ctx.personal.displayName },
+        ];
+  const recalledHits = await recallAcrossSpaces(recallSources, { text: prompt, limit: 5, now });
+  const recalled =
+    recalledHits.length > 0
+      ? `What you know about this founder that bears on this question, most relevant first. Use it to shape the reply; never state it back as a finding:\n${recalledHits
+          .map((hit) => `- [${hit.spaceLabel}] ${hit.record.text}`)
+          .join('\n')}`
+      : '';
+
   const plan = buildDelegationPlan({
     prompt: spoken,
     routing,
@@ -284,6 +328,7 @@ export async function ask(
               // Built-in *and* bridged: the answering half must know exactly
               // what the planning half can reach, or it disclaims abilities the
               // loop just used.
+              recalled,
               describeSelf({
                 // Founder mode has no single acting scope, but it is not
                 // powerless — it is the surface where "what can you do?" is most

@@ -29,7 +29,7 @@ import 'server-only';
 
 import type { LlmProvider, Scope, ToolDefinition } from '@/lib/domain';
 import { detectAct, type PlannedCall } from './act';
-import { availableTools } from './available';
+import { availableTools, toolsForAgent } from './available';
 import { proposeCore } from './tools/propose';
 
 /**
@@ -66,14 +66,11 @@ export async function runActLoop(
     readonly now: Date;
     readonly preferCapabilityId?: string;
     /**
-     * Narrows what this loop may even plan. A hired agent's loop passes its
-     * capability filter here, which makes the Team page's promise structural:
-     * a tool outside the filter is not offered, and a model that names one
-     * anyway is dropped by name resolution — never "allowed this once".
-     * The filter can only ever narrow `availableTools`; there is no widening
-     * counterpart, by design.
+     * Confine this turn to one operator's charter. Subtractive only — see
+     * `toolsForAgent`. Absent means the founder's own assistant, which reaches
+     * everything the space has.
      */
-    readonly toolFilter?: (tool: ToolDefinition) => boolean;
+    readonly agent?: { readonly toolIds?: readonly string[]; readonly capabilityIds?: readonly string[] };
   },
 ): Promise<LoopResult> {
   const steps: LoopStep[] = [];
@@ -84,7 +81,7 @@ export async function runActLoop(
   // mid-turn, and re-probing the workspace between rounds would make the tools
   // the planner sees depend on how long it had been thinking.
   const all = await availableTools(options.scope);
-  const tools = options.toolFilter ? all.filter(options.toolFilter) : all;
+  const tools = options.agent ? toolsForAgent(all, options.agent) : all;
 
   for (let round = 0; round < MAX_ROUNDS; round += 1) {
     // The prompt grows with what has been learned. The planner sees the founder's
@@ -114,6 +111,9 @@ export async function runActLoop(
 
       const outcome = await proposeCore(options.scope, planned.toolId, planned.args, {
         now: options.now,
+        // Distinct per step, so two identical calls in one turn are two records
+        // rather than one id written twice. Deterministic, so tests stay stable.
+        sequence: steps.length,
       });
       steps.push({
         toolId: planned.toolId,

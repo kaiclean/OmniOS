@@ -19,6 +19,8 @@
 
 import type { CollectionName } from '@/lib/data/schema';
 import type { ToolArgs, ToolDefinition } from '@/lib/domain';
+import { COMPANY_STAGES } from '@/lib/domain';
+import { AGENT_PRESET_IDS } from '@/lib/ai/agent-presets';
 import {
   ASSET_KINDS,
   AUTOMATION_TRIGGERS,
@@ -187,6 +189,80 @@ const TOOL_LIST = [
      * these run without an approval: looking at your own records changes
      * nothing, and a question that has to be approved is a question nobody asks.
      */
+    /**
+     * Founder-level verbs, and the reason the assistant read as helpless.
+     *
+     * Thirty-two tools covered records inside a space — tasks, goals, KPIs — and
+     * not one covered the things a founder actually opens OmniOS to do. Asked to
+     * create a company, it answered "there's no tool for that", which was true:
+     * `createCompany` existed as a button and had no vocabulary. The same held
+     * for hiring an agent, convening the room, and adding a connection. The
+     * capability was there; the assistant simply could not reach it.
+     *
+     * These are `write`: they create records this workspace owns and nothing
+     * leaves the machine. A new company is reversible — archive or delete it.
+     */
+    id: 'create_company',
+    label: 'Create a company',
+    description:
+      'Spin up a whole company space — headquarters, capabilities, goals, and a generated starting workspace. Use when the founder describes a business they are starting or already running that has no space yet.',
+    risk: 'write',
+    capabilityId: 'executive',
+    scopeKinds: BOTH,
+    matches: [
+      'create a company', 'new company', 'start a company', 'set up a company',
+      'add a company', 'i am starting', 'spin up a company', 'launch a business',
+    ],
+    params: [
+      { name: 'name', type: 'string', description: 'What the company is called.', required: true },
+      { name: 'description', type: 'text', description: 'What it does, in one or two sentences.', required: false },
+      { name: 'industry', type: 'string', description: 'The market it operates in.', required: false },
+      { name: 'businessModel', type: 'text', description: 'How it makes money.', required: false },
+      { name: 'mission', type: 'text', description: 'Why it exists.', required: false },
+      { name: 'stage', type: 'enum', description: 'Where it is today.', required: false, enumValues: COMPANY_STAGES, default: 'idea' },
+      { name: 'goals', type: 'text', description: 'Up to six starting goals, one per line.', required: false },
+    ],
+    preview: (args: ToolArgs) =>
+      `Create the company ${quoted(args, 'name', 'untitled')} at stage ${argText(args, 'stage', 'idea')}, with a generated headquarters across every capability. Reversible — you can archive or delete it.`,
+  },
+  {
+    id: 'hire_agent',
+    label: 'Hire an agent',
+    description:
+      'Add a specialist to this space\u2019s roster from a preset, so it routes, speaks in the room and can be talked to directly. Hiring grants no new power: whatever it proposes stops at the same gate.',
+    risk: 'write',
+    capabilityId: 'executive',
+    scopeKinds: BOTH,
+    matches: [
+      'hire an agent', 'hire a', 'add an agent', 'i need someone who', 'add a specialist',
+      'bring in a', 'we need a', 'add to the team',
+    ],
+    params: [
+      { name: 'presetId', type: 'enum', description: 'Which preset to hire.', required: true, enumValues: AGENT_PRESET_IDS },
+      { name: 'name', type: 'string', description: 'What to call them. Defaults to the preset name.', required: false },
+    ],
+    preview: (args: ToolArgs) =>
+      `Hire ${argText(args, 'presetId', 'an agent')} into this space${argText(args, 'name', '') ? ` as ${quoted(args, 'name', '')}` : ''}. They join the roster and can be switched off again; they gain no permissions.`,
+  },
+  {
+    id: 'open_meeting',
+    label: 'Open a meeting',
+    description:
+      'Convene the specialists this topic needs in this space\u2019s room. They answer from real records and can disagree; nothing they plan runs until the founder approves it.',
+    risk: 'write',
+    capabilityId: 'executive',
+    scopeKinds: BOTH,
+    matches: [
+      'open a meeting', 'convene', 'hold a meeting', 'get the team together',
+      'team room', 'ask the room', 'what does the team think',
+    ],
+    params: [
+      { name: 'topic', type: 'string', description: 'What the meeting is about, in the founder\u2019s words.', required: true },
+    ],
+    preview: (args: ToolArgs) =>
+      `Open a meeting in this space on ${quoted(args, 'topic', 'an unnamed topic')}. The right specialists are seated automatically; nothing they plan runs without your approval.`,
+  },
+  {
     id: 'search_workspace',
     label: 'Search this space',
     description:

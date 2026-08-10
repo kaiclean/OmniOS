@@ -114,14 +114,6 @@ export const lifeAdminOf = (c: AssistantContext): Array<Origin<LifeAdminItem>> =
 export const calendarOf = (c: AssistantContext): Array<Origin<CalendarBlock>> =>
   collect(c, 'calendar');
 
-/** The scopes a target is permitted to read. Used by the loader; never widened elsewhere. */
-export function scopesForTarget(target: AssistantTarget, companies: readonly Company[]): Scope[] {
-  const shared = capabilityIds().map(sharedScope);
-  if (target.kind === 'founder') {
-    return [...companies.map((c) => ({ kind: 'company' as const, companyId: c.id })), personalScope(), ...shared];
-  }
-  return [target.scope, ...shared];
-}
 
 export function targetKey(target: AssistantTarget): string {
   return target.kind === 'founder' ? 'founder' : scopeKey(target.scope);

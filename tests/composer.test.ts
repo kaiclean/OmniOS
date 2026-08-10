@@ -110,12 +110,11 @@ describe('a hired agent’s loop is structurally narrowed', () => {
         }) as unknown as LlmToolResponse,
     };
 
-    const owned = new Set(['health']);
     const result = await loop.runActLoop('log an invoice for 500', {
       scope: personalScope(),
       provider,
       now: NOW,
-      toolFilter: (tool) => tool.risk === 'read' || owned.has(tool.capabilityId),
+      agent: { capabilityIds: ['health'] },
     });
 
     // The call was dropped by name resolution, not executed and not queued.

@@ -3,12 +3,14 @@ import 'server-only';
 /**
  * Founder-level aggregation.
  *
- * This is the ONE place that reads across spaces. It exists because the founder
- * owns all of them and a unified overview is the point of the product — but it
- * is deliberately quarantined here, and it is never used to assemble context for
- * an agent. Agent context comes from `lib/ai/context.ts`, which reads a single
- * scope. If you find yourself importing this file from anywhere under `lib/ai/`,
- * something has gone wrong.
+ * The one place cross-space *reporting* lives — the overview, the timeline —
+ * because the founder owns every space and a unified view is the point of the
+ * product. The quarantine is about imports, and it is mechanical: nothing under
+ * `lib/ai/` may import this file, and `tests/boundaries.test.ts` fails the build
+ * if anything does. Founder-mode agent context is assembled separately, in
+ * `lib/ai/assistant.ts`, by reading each owned scope by name — same data rights,
+ * different code path, so a reporting helper added here never widens what a
+ * model is handed.
  */
 
 import type {
