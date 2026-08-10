@@ -38,7 +38,15 @@ export function Copilot({
   personalName,
   suggestions,
   companySuggestions,
-}: CopilotProps) {
+  onClose,
+}: CopilotProps & {
+  /**
+   * Supplied by the shell, not by the server — closing is a shell concern.
+   * Only rendered where the copilot is a sheet; the permanent column is
+   * dismissed from the strip.
+   */
+  onClose?: () => void;
+}) {
   const pathname = usePathname();
   const page = useMemo(() => derivePageContext(pathname), [pathname]);
   const targetKey = targetKeyForPage(page);
@@ -115,6 +123,16 @@ export function Copilot({
             <span className="badge badge--outline">{scopeLabel}</span>
           </div>
         </div>
+        {onClose ? (
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon copilot-close"
+            aria-label="Close assistant"
+            onClick={onClose}
+          >
+            <Icon name="close" />
+          </button>
+        ) : null}
       </header>
 
       <div className="copilot-scroll" ref={scrollRef}>

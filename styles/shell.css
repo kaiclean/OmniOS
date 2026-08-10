@@ -334,6 +334,10 @@
   display: none;
   align-self: center;
   margin-right: var(--s-3);
+  /* As a flex item between the scrolling metrics and the actions it would
+     otherwise be crushed to a sliver at 320px — the one control that opens
+     navigation on a phone must never shrink. */
+  flex: 0 0 auto;
 }
 
 @media (max-width: 900px) {
@@ -343,7 +347,21 @@
 }
 
 @media (max-width: 700px) {
+  /* Visually icon-only, but the accessible name must survive: hiding the label
+     with display:none leaves the button announced as "⌘K". */
   .palette-trigger-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* A keyboard shortcut hint is noise on a touch screen. */
+  .strip .kbd {
     display: none;
   }
 }
@@ -396,6 +414,21 @@
   height: var(--topbar-h);
   padding: 0 var(--s-4);
   border-bottom: 1px solid var(--hairline-faint);
+}
+
+/* Only the sheet form of the copilot needs a close control: as a permanent
+   column it is dismissed from the strip, but as a sheet it covers the strip —
+   without this button a phone has no way back out. */
+.btn.copilot-close {
+  display: none;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+@media (max-width: 1360px) {
+  .btn.copilot-close {
+    display: inline-flex;
+  }
 }
 
 .copilot-scroll {
@@ -470,6 +503,12 @@
   background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(2px);
   animation: fade-in var(--dur-2) var(--ease-out);
+}
+
+/* The copilot sheet sits at z-60; its scrim must slide between the sheet and
+   everything else, or tapping beside the sheet hits the page underneath. */
+.scrim--sheet {
+  z-index: 55;
 }
 
 @keyframes fade-in {
