@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Full-bleed ground with the mark held inside the 80% safe zone, so any
+       platform mask (circle, squircle, rounded square) never clips it. -->
+  <rect width="512" height="512" fill="#0b0b0c" />
+  <circle cx="256" cy="256" r="122" fill="none" stroke="#8f92f5" stroke-width="21" opacity="0.45" />
+  <circle cx="256" cy="256" r="46" fill="#8f92f5" />
+</svg>

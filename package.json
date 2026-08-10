@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "start:local": "next start -H 127.0.0.1 -p 3000"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

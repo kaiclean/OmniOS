@@ -101,6 +101,20 @@ export default async function SecurityPage() {
                   : 'Telegram not connected'
               }
             />
+            <Metric
+              label="Access key"
+              value={process.env.OMNIOS_ACCESS_KEY ? 'Set' : EMPTY}
+              hint={
+                process.env.OMNIOS_ACCESS_KEY
+                  ? 'Every page and API requires a session'
+                  : 'Local-only — set OMNIOS_ACCESS_KEY before any tunnel'
+              }
+            />
+            <Metric
+              label="Last heartbeat"
+              value={workspace.lastHeartbeatAt ? formatRelative(workspace.lastHeartbeatAt) : EMPTY}
+              hint="The 12-hour check proving the tunnel and server are alive"
+            />
           </MetricGrid>
         </div>
       </section>

@@ -14,6 +14,12 @@ export const metadata: Metadata = {
     'An operating system for a founder: companies, capabilities and private life in one place, with one AI Executive Assistant across all of it.',
   applicationName: 'OmniOS',
   robots: { index: false, follow: false },
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'OmniOS',
+  },
 };
 
 export const viewport: Viewport = {
@@ -23,6 +29,9 @@ export const viewport: Viewport = {
   ],
   width: 'device-width',
   initialScale: 1,
+  // Lets the app paint under the iPhone's notch and home indicator; the
+  // safe-area insets in the stylesheets keep content out of both.
+  viewportFit: 'cover',
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

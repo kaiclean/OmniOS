@@ -232,3 +232,15 @@ hr {
   flex: 1 1 auto;
   min-width: 0;
 }
+
+/* Standalone-app feel on touch devices: no rubber-band over the shell, no grey
+   tap flash, no double-tap-to-zoom delay on controls. */
+html {
+  overscroll-behavior-y: none;
+}
+button,
+a,
+select {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}

@@ -22,6 +22,8 @@ export interface CopilotProps {
   suggestions: readonly string[];
   /** Empty-state chips when the founder is inside a company. */
   companySuggestions: readonly string[];
+  /** Dismisses the mobile sheet; the shell owns that state. */
+  onCloseSheet?: () => void;
 }
 
 /**
@@ -40,6 +42,7 @@ export function Copilot({
   personalName,
   suggestions,
   companySuggestions,
+  onCloseSheet,
 }: CopilotProps) {
   const pathname = usePathname();
   const page = useMemo(() => derivePageContext(pathname), [pathname]);
@@ -188,6 +191,14 @@ export function Copilot({
           onClick={newThread}
         >
           <Icon name="plus" size={13} />
+        </button>
+        <button
+          className="btn btn--ghost btn--icon btn--sm copilot-close"
+          type="button"
+          aria-label="Close assistant"
+          onClick={onCloseSheet}
+        >
+          <Icon name="close" size={13} />
         </button>
       </header>
 

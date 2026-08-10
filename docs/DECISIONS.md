@@ -173,3 +173,27 @@ with plain equality and stops a refresh silently reshuffling the founder's world
   `MemoryRecord.embedding` exists so an index can be added without a migration.
 - **Records are largely read-only in the UI.** Creation flows exist for companies,
   briefs, assets, product specs and automations; general inline editing does not.
+
+---
+
+## 5. Remote access (added with the mobile wave)
+
+- **Access-key gate, opt-in.** With `OMNIOS_ACCESS_KEY` unset nothing changes:
+  OmniOS stays a localhost app with no auth, as originally decided. Setting it
+  puts every page, Server Action and API behind a session cookie whose HMAC key
+  *derives from the access key* — rotation is revocation. The gate lives in
+  `proxy.ts` (Next 16 deprecates `middleware.ts`); the decisions live in
+  `lib/auth/paths.ts` where they are unit-tested. Exempt and self-authenticating:
+  the Telegram webhook (own secret) and `/api/health` (key as header, for the
+  heartbeat). `/api/brain-graph`, previously open, is inside the boundary.
+- **The login page reuses the root layout.** The root layout reads only three
+  cosmetic settings attributes; the workspace-rendering shell layout under
+  `(os)` never mounts pre-auth. Forking root layouts would duplicate `<html>`
+  and cause a theme flash for no security gain.
+- **Deployment is one trusted machine plus an outbound-only tunnel.** The store
+  is filesystem-based and single-process by design; serverless would break
+  writes and regenerate `.secret-key` (making every secret undecryptable). The
+  Vercel deployment is therefore a stateless demo only. Production binds
+  `127.0.0.1` (`start:local`) so the tunnel — cloudflared or Tailscale, both
+  outbound-only — is the sole way in: no listeners. See `docs/MOBILE.md` and
+  `ops/`.
