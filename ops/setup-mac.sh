@@ -49,7 +49,7 @@ echo "✓ built"
 
 # 4. launchd services — template placeholders, install, (re)load.
 mkdir -p "$AGENTS" "$HOME/Library/Logs/omnios"
-for PLIST in com.omnios.server com.omnios.heartbeat; do
+for PLIST in com.omnios.server com.omnios.heartbeat com.omnios.backup; do
   sed -e "s|__OMNIOS_REPO__|$REPO|g" -e "s|__OMNIOS_HOME__|$HOME|g" \
     "$REPO/ops/launchd/$PLIST.plist" > "$AGENTS/$PLIST.plist"
   launchctl bootout "gui/$UID_NUM" "$AGENTS/$PLIST.plist" 2>/dev/null || true

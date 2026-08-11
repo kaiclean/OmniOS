@@ -197,3 +197,18 @@ with plain equality and stops a refresh silently reshuffling the founder's world
   `127.0.0.1` (`start:local`) so the tunnel — cloudflared or Tailscale, both
   outbound-only — is the sole way in: no listeners. See `docs/MOBILE.md` and
   `ops/`.
+
+## 6. Durability (added with the backup wave)
+
+- **The backup unit is the whole data dir, vault key included.** A backup that
+  omitted `.secret-key` would restore secrets nobody can decrypt — worse than
+  no backup, because it looks like one. The consequence is stated where it
+  matters: an archive is exactly as sensitive as the live data (dir 700,
+  archives 600, never synced unencrypted).
+- **Restore never deletes.** `ops/restore.sh` moves the current data dir aside
+  with a timestamp; a restore can itself be undone. Retention pruning is the
+  only deletion in the pipeline and every pruned archive is logged.
+- **Plain tar over clever formats.** The data is small JSON; a format anyone
+  can open on any machine two decades from now beats deduplication a lifelong
+  OS does not need. If the data ever outgrows tar, that is a `WorkspaceStore`
+  conversation, not a backup-format one.

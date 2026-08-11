@@ -44,10 +44,11 @@ git clone https://github.com/kaiclean/OmniOS.git && cd OmniOS
 ops/setup-mac.sh
 ```
 
-The script checks prerequisites, builds the app, and installs three launchd
+The script checks prerequisites, builds the app, and installs four launchd
 services: `com.omnios.server` (production server bound to **127.0.0.1 only**),
-`com.omnios.tunnel` (if cloudflared is installed), and `com.omnios.heartbeat`
-(every 12 hours + on boot). Re-run it any time — it is idempotent.
+`com.omnios.tunnel` (if cloudflared is installed), `com.omnios.heartbeat`
+(every 12 hours + on boot), and `com.omnios.backup` (daily at 03:30 + on
+load). Re-run it any time — it is idempotent.
 
 ## 4a · Tunnel, option A: Cloudflare (public URL)
 
@@ -94,7 +95,29 @@ curl -s -o /dev/null -w '%{http_code}\n' https://YOUR_URL/api/brain-graph  # 401
 In the app, **Security Center → Last heartbeat** shows the most recent beat,
 and **Access key → Set** confirms the gate is up.
 
-## 7 · Rotating the key
+## 7 · Backups — your whole OS is one directory
+
+Everything OmniOS knows lives in the data dir (`workspace.json`, the encrypted
+`secrets.json`, and the vault key `.secret-key`). `com.omnios.backup` archives
+it daily at 03:30 to `~/.omnios/backups/omnios-<timestamp>.tar.gz`, keeping
+the newest 14 (`OMNIOS_BACKUP_DIR` / `OMNIOS_BACKUP_KEEP` in `~/.omnios/env`
+override both). **A backup contains the vault key, so it is exactly as
+sensitive as the live data** — the directory is 700, archives 600, and if you
+sync them anywhere, encrypt first.
+
+Restore is one command, and it never deletes anything — the current data dir
+is moved aside so the restore itself can be undone:
+
+```sh
+ops/restore.sh ~/.omnios/backups/omnios-20260811-033000.tar.gz
+```
+
+Run one restore drill after setup so the first real restore is not also the
+first test: `ops/backup.sh`, then restore that archive, then check the app
+still shows your data. `tail ~/Library/Logs/omnios/backup.log` shows every
+snapshot and every pruned archive.
+
+## 8 · Rotating the key
 
 Edit `OMNIOS_ACCESS_KEY` in `~/.omnios/env`, then
 `launchctl kickstart -k gui/$(id -u)/com.omnios.server`. Every existing
