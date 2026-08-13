@@ -94,12 +94,25 @@ export interface ContextReference {
 export const MESSAGE_ROLES = ['founder', 'assistant'] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
 
+/**
+ * A tappable next move attached to an assistant reply. Tapping inserts
+ * `insert` into the composer for the founder to finish and send — it never
+ * executes anything by itself, so the gate model is untouched: the founder's
+ * send is still the only trigger.
+ */
+export interface MessageAction {
+  readonly label: string;
+  readonly insert: string;
+}
+
 export interface AssistantMessage extends ScopedRecord {
   readonly role: MessageRole;
   readonly text: string;
   readonly at: Timestamp;
   /** Present on assistant turns. The founder can expand it; it is never forced on them. */
   readonly plan?: DelegationPlan;
+  /** Offers the reply makes — rendered as chips, so a menu never has to be typed back. */
+  readonly actions?: readonly MessageAction[];
   /** True when produced by the local simulator rather than a real model. */
   readonly simulated: boolean;
   readonly providerId: string;

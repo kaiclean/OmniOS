@@ -415,6 +415,23 @@ export async function ask(
     text = `${actLines.join('\n')}\n\n${text}`;
   }
 
+  // The reply's offers, made tappable. Observed live: the assistant listed
+  // "create a goal / add a risk / search your records" and the founder pasted
+  // the menu back at it — which the local path then could not parse. An offer
+  // that cannot be taken by tapping it is a menu, not an ability.
+  const actions: { label: string; insert: string }[] = [];
+  if (slash?.parseError) {
+    actions.push({ label: `Retry /${slash.label}`, insert: `/${slash.label} ` });
+  } else if (!slash && composition.orientation && actScope && actScope.kind !== 'shared') {
+    actions.push(
+      { label: 'Create a task…', insert: '/task ' },
+      { label: 'Set a goal…', insert: '/goal ' },
+      { label: 'Write a doc…', insert: '/doc ' },
+      { label: 'Flag a risk…', insert: '/risk ' },
+      { label: 'Remember a fact…', insert: '/remember ' },
+    );
+  }
+
   const finishedAt = new Date().toISOString();
   const storageScope = target.kind === 'founder' ? personalScope() : target.scope;
   // A named thread keeps its own id; the main thread of founder mode is the
@@ -434,6 +451,7 @@ export async function ask(
     // A command's reply is a receipt; attaching the routing plan would claim
     // specialists were consulted on an instruction none of them touched.
     ...(commandTurn ? {} : { plan }),
+    ...(actions.length > 0 ? { actions } : {}),
     simulated,
     providerId: provider.id,
     ...(storedChannel ? { channel: storedChannel } : {}),

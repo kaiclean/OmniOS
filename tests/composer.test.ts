@@ -205,3 +205,26 @@ describe('the composer can carry a document, a risk, and money', () => {
     expect(risk!.detail).toContain('no second conversation');
   }, 60_000);
 });
+
+describe('an offer you can tap is an ability; a menu you must retype is not', () => {
+  it('an orientation reply in a space carries tappable next moves', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'Hello?',
+      new Date('2026-08-08T11:00:00.000Z'),
+    );
+    expect(result.message.actions?.length).toBeGreaterThan(0);
+    const inserts = (result.message.actions ?? []).map((a) => a.insert);
+    expect(inserts).toContain('/goal ');
+    expect(inserts).toContain('/risk ');
+  }, 60_000);
+
+  it('a failed slash parse offers the retry as a chip', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/expense lots of money',
+      new Date('2026-08-08T11:00:00.000Z'),
+    );
+    expect(result.message.actions?.[0]?.insert).toBe('/expense ');
+  }, 60_000);
+});

@@ -103,7 +103,10 @@ describe('the local reasoning engine', () => {
 
   it('orients rather than inventing an answer when no specialist owns the question', () => {
     const result = answer('zzzz qqqq wibble', [companySlice], ['company']);
-    expect(result.summary).toMatch(/No clear specialist owner/);
+    // The visible plan label reads as disclosure, and the orientation flag is
+    // what lets the assistant attach tappable next moves to the reply.
+    expect(result.summary).toMatch(/no single specialist owned/i);
+    expect(result.orientation).toBe(true);
     expect(result.body).toMatch(/do not have a specialist/);
   });
 
