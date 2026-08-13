@@ -47,7 +47,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${GeistSans.variable} ${GeistMono.variable}`}
       suppressHydrationWarning
     >
-      <body>
+      {/* Browser extensions (Monica, Grammarly, password managers) stamp their
+          own attributes onto <body> before React hydrates, which is outside
+          this app's control and harmless — suppressing here silences exactly
+          that class of mismatch without hiding real ones deeper in the tree. */}
+      <body suppressHydrationWarning>
         <a className="skip-link" href="#work">
           Skip to content
         </a>
