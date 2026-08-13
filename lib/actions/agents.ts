@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { AssistantMessage, CustomAgent, Scope, SpecialistDomain } from '@/lib/domain';
-import { SPECIALIST_DOMAINS, agentIdFrom, makeRecordId, parseScopeKey } from '@/lib/domain';
+import { SPECIALIST_DOMAINS, agentIdFrom, credentialShape, makeRecordId, parseScopeKey } from '@/lib/domain';
 import { insertRecords, readCollection, removeRecord, updateRecord } from '@/lib/data/store';
 import { capabilityIds } from '@/lib/capabilities/registry';
 import { getPreset } from '@/lib/ai/agent-presets';
@@ -216,6 +216,17 @@ export async function speakToAgent(
   const trimmed = text.trim();
   if (!scope) return { ok: false, error: 'No such space.' };
   if (!trimmed) return { ok: false, error: 'Say something first.' };
+
+  // Same guard as the main composer: a pasted token lands in plaintext in the
+  // scope's messages and is sent to the model one turn later, and deleting the
+  // record afterwards does not un-send it. Refuse before either happens.
+  const credential = credentialShape(trimmed);
+  if (credential) {
+    return {
+      ok: false,
+      error: `That looks like it contains a ${credential}, so I have not stored or sent it. Put it in the vault — Connections → Keys and secrets — and refer to it by name. If it was a real credential, treat it as exposed and rotate it.`,
+    };
+  }
 
   const roster = await rosterFor(scope);
   const specialist = roster.find((candidate) => candidate.id === agentId);

@@ -75,6 +75,10 @@ describe('what the gate covers', () => {
     expect(safeNextPath('https://evil.example')).toBe('/');
     expect(safeNextPath(null)).toBe('/');
     expect(safeNextPath('')).toBe('/');
+    // Browsers read a backslash as a slash, so these navigate off-site too.
+    expect(safeNextPath('/\\evil.example')).toBe('/');
+    expect(safeNextPath('/\\/evil.example')).toBe('/');
+    expect(safeNextPath('\\\\evil.example')).toBe('/');
   });
 });
 

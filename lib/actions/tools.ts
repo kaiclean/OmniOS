@@ -81,9 +81,13 @@ export async function approveToolCall(scope: Scope, toolCallId: string): Promise
   return outcome;
 }
 
-export async function rejectToolCall(scope: Scope, toolCallId: string): Promise<void> {
-  await rejectToolCallAs(scope, toolCallId, LOCAL_DECIDER);
+export async function rejectToolCall(scope: Scope, toolCallId: string): Promise<boolean> {
+  // The boolean is the truth the UI needs: false means the call was no longer
+  // pending — already approved-and-run, or rejected in another tab — so the row
+  // must not claim "Rejected. Nothing ran." over a call that in fact ran.
+  const rejected = await rejectToolCallAs(scope, toolCallId, LOCAL_DECIDER);
   revalidatePath('/', 'layout');
+  return rejected;
 }
 
 export interface PendingCall {

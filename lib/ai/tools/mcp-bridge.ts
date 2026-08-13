@@ -20,7 +20,7 @@ import type {
   ToolDefinition,
   ToolParam,
 } from '@/lib/domain';
-import { mcpToolId } from '@/lib/domain';
+import { mcpToolId, riskForMcpTool } from '@/lib/domain';
 
 interface JsonSchemaProperty {
   readonly type?: string | string[];
@@ -131,7 +131,12 @@ export function mcpToolDefinition(
     id,
     label: `${readable} · ${server.name}`,
     description: `${descriptor.description} Runs on the ${server.name} connection.`,
-    risk: descriptor.risk,
+    // Tier from the server's *live* autonomy, not the value frozen into the
+    // descriptor at probe time. A founder who tightens a connection from
+    // 'trusted' to 'ask-always' must have that take effect on the next call —
+    // trusting the probe snapshot kept the looser tier until a manual re-probe,
+    // so a tightened server went on running external calls unattended.
+    risk: riskForMcpTool(descriptor.name, server.autonomy),
     capabilityId: server.capabilityId,
     // A connection belongs to the founder, so its tools are offered in every
     // space they work in. Which scope a call is *recorded* against is still

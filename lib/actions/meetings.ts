@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { Meeting, MeetingTurn, Scope } from '@/lib/domain';
-import { parseScopeKey } from '@/lib/domain';
+import { credentialShape, parseScopeKey } from '@/lib/domain';
 import { insertRecords, mutateScope, readCollection, updateRecord } from '@/lib/data/store';
 import { draftPlan, newMeeting, recommendParticipants, specialistTurn, turnContext } from '@/lib/ai/meeting';
 import { rosterFor } from '@/lib/ai/roster';
@@ -66,6 +66,17 @@ export async function speakInMeeting(
   const scope = resolveScope(scopeKeyInput);
   const trimmed = text.trim();
   if (!scope || !trimmed) return { ok: false, error: 'Say something first.' };
+
+  // A meeting turn persists to disk and is read by every participant's model —
+  // a pasted token would leak twice over. Refuse it the same way the composer
+  // does, before it is stored or sent.
+  const credential = credentialShape(trimmed);
+  if (credential) {
+    return {
+      ok: false,
+      error: `That looks like it contains a ${credential}, so I have not stored or sent it. Put it in the vault — Connections → Keys and secrets — and refer to it by name, then rotate it if it was real.`,
+    };
+  }
 
   const meeting = await findMeeting(scope, meetingId);
   if (!meeting) return { ok: false, error: 'That meeting is not in this space.' };

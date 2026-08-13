@@ -29,9 +29,13 @@ export function shouldProtect(pathname: string): boolean {
 /**
  * Where to send the founder after login. Only a same-origin path survives:
  * anything protocol-shaped or protocol-relative would make the login page an
- * open redirect.
+ * open redirect. Browsers treat a backslash as a slash in URLs, so `/\evil.com`
+ * and `/\/evil.com` navigate off-site exactly like `//evil.com` — the check
+ * normalises backslashes first, then rejects any double-slash lead.
  */
 export function safeNextPath(raw: string | null): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
-  return raw;
+  if (!raw) return '/';
+  const normalised = raw.replace(/\\/g, '/');
+  if (!normalised.startsWith('/') || normalised.startsWith('//')) return '/';
+  return normalised;
 }
