@@ -123,3 +123,154 @@ describe('a hired agent’s loop is structurally narrowed', () => {
     expect(finance.some((entry) => entry.label === 'Sneaky invoice')).toBe(false);
   }, 60_000);
 });
+
+describe('the composer can carry a document, a risk, and money', () => {
+  const AT_TEN = new Date('2026-08-08T10:00:00.000Z');
+
+  it('/doc writes a real document: first line titles it, the rest is the body', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/doc Intake-to-invoice outline v1\n1. Intake form\n2. Quote draft\n3. Invoice + chase',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('Done:');
+
+    const docs = await store.readCollection(personalScope(), 'docs');
+    const doc = docs.find((entry) => entry.title === 'Intake-to-invoice outline v1');
+    expect(doc).toBeDefined();
+    expect(doc!.body).toContain('2. Quote draft');
+  }, 60_000);
+
+  it('/doc without a body replies with the registry’s own guidance and writes nothing', async () => {
+    const before = (await store.readCollection(personalScope(), 'docs')).length;
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/doc Only a title',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('first line is the title');
+    expect(result.message.text).not.toContain('Done:');
+    expect((await store.readCollection(personalScope(), 'docs')).length).toBe(before);
+  }, 60_000);
+
+  it('/expense books integer minor units out, dated by the turn clock', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/expense 49.90 Playwright licence',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('Done:');
+    expect(result.message.text).toContain('CHF 49.90');
+
+    const finance = await store.readCollection(personalScope(), 'finance');
+    const entry = finance.find((candidate) => candidate.label === 'Playwright licence');
+    expect(entry).toBeDefined();
+    expect(entry!.amount.amount).toBe(4990);
+    expect(entry!.direction).toBe('out');
+    expect(entry!.date).toBe('2026-08-08');
+    expect(entry!.simulated).toBeUndefined();
+  }, 60_000);
+
+  it('/income books money in, and a garbled amount gets guidance instead of a guess', async () => {
+    const ok = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      "/income 1'500 Helvetia setup fee",
+      AT_TEN,
+    );
+    expect(ok.message.text).toContain('Done:');
+    const finance = await store.readCollection(personalScope(), 'finance');
+    const entry = finance.find((candidate) => candidate.label === 'Helvetia setup fee');
+    expect(entry!.amount.amount).toBe(150000);
+    expect(entry!.direction).toBe('in');
+
+    const bad = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/expense lots of money on things',
+      AT_TEN,
+    );
+    expect(bad.message.text).toContain('Say it like');
+    expect(bad.message.text).not.toContain('Done:');
+  }, 60_000);
+
+  it('/risk records label and consequence from two lines', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/risk Single prospect pipeline\nIf Helvetia stalls there is no second conversation, and the quarter goal dies with it.',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('Done:');
+    const risks = await store.readCollection(personalScope(), 'risks');
+    const risk = risks.find((entry) => entry.label === 'Single prospect pipeline');
+    expect(risk).toBeDefined();
+    expect(risk!.detail).toContain('no second conversation');
+  }, 60_000);
+});
+
+describe('an offer you can tap is an ability; a menu you must retype is not', () => {
+  it('an orientation reply in a space carries tappable next moves', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'Hello?',
+      new Date('2026-08-08T11:00:00.000Z'),
+    );
+    expect(result.message.actions?.length).toBeGreaterThan(0);
+    const inserts = (result.message.actions ?? []).map((a) => a.insert);
+    expect(inserts).toContain('/goal ');
+    expect(inserts).toContain('/risk ');
+  }, 60_000);
+
+  it('a failed slash parse offers the retry as a chip', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/expense lots of money',
+      new Date('2026-08-08T11:00:00.000Z'),
+    );
+    expect(result.message.actions?.[0]?.insert).toBe('/expense ');
+  }, 60_000);
+});
+
+describe('the assistant knows what it is and holds a short thread of intent', () => {
+  const AT_NOON = new Date('2026-08-08T12:00:00.000Z');
+
+  it('"what model are you using?" gets the system truth, not "unknown"', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'What model are you using?',
+      AT_NOON,
+    );
+    expect(result.message.text).toMatch(/local reasoning|provider/i);
+    expect(result.message.text).not.toMatch(/unknown/i);
+    // Nobody was consulted for a question about the system itself.
+    expect(result.message.plan).toBeUndefined();
+  }, 60_000);
+
+  it('"what specialists…?" names the roster and how routing works', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'What specialists do you use?',
+      AT_NOON,
+    );
+    expect(result.message.text).toMatch(/Routing is automatic/);
+    expect(result.message.text).toMatch(/@engineer/);
+  }, 60_000);
+
+  it('a short acceptance after an offer re-presents the chips instead of amnesia', async () => {
+    const channel = 'thread:acceptance01';
+    const offer = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'Hello?',
+      AT_NOON,
+      { channel },
+    );
+    expect(offer.message.actions?.length).toBeGreaterThan(0);
+
+    const accept = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'Lets do both and continue with the next best steps',
+      new Date('2026-08-08T12:05:00.000Z'),
+      { channel },
+    );
+    expect(accept.message.text).toContain('one tap away');
+    expect(accept.message.actions?.length).toBe(offer.message.actions?.length);
+  }, 60_000);
+});

@@ -240,7 +240,16 @@ export function Copilot({
             </div>
           </div>
         ) : (
-          messages.map((message) => <Message key={message.id} message={message} />)
+          messages.map((message) => (
+            <Message
+              key={message.id}
+              message={message}
+              onInsert={(insert) => {
+                setDraft(insert);
+                (document.querySelector('[data-copilot-input]') as HTMLTextAreaElement | null)?.focus();
+              }}
+            />
+          ))
         )}
 
         {pending ? (
@@ -325,11 +334,34 @@ export function Copilot({
   );
 }
 
-function Message({ message }: { message: AssistantMessage }) {
+function Message({
+  message,
+  onInsert,
+}: {
+  message: AssistantMessage;
+  onInsert?: (insert: string) => void;
+}) {
   const isFounder = message.role === 'founder';
   return (
     <div className={`msg msg--${isFounder ? 'founder' : 'assistant'}`}>
       <div className="msg-body">{message.text}</div>
+      {/* Offers as chips: tapping prefills the composer, the founder finishes
+          the sentence and sends. Nothing executes on tap — the gate model
+          stays exactly where it was. */}
+      {!isFounder && message.actions?.length && onInsert ? (
+        <div className="row wrap" style={{ gap: 'var(--s-1)', marginTop: 'var(--s-2)' }}>
+          {message.actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => onInsert(action.insert)}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {/* The simulated mark rides on the message, not on whether a plan is
           attached: a command receipt ("/task …") is locally generated and
           carries no plan, and nesting the mark inside the plan branch dropped it

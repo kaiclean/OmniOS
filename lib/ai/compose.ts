@@ -38,6 +38,12 @@ export interface Composition {
   readonly body: string;
   readonly references: readonly ContextReferenceInput[];
   readonly outputs: ReadonlyMap<string, string>;
+  /**
+   * Set when no specialist owned the question and the reply is orientation
+   * rather than analysis. The assistant uses it to attach tappable next moves
+   * — the founder should never have to type back a menu the reply offered.
+   */
+  readonly orientation?: true;
 }
 
 const PRIORITY_WEIGHT: Record<Task['priority'], number> = { p0: 0, p1: 1, p2: 2, p3: 3 };
@@ -585,10 +591,13 @@ const composeGeneral: Composer = (ctx, prompt) => {
   ]);
 
   return {
-    summary: 'No clear specialist owner — orienting instead of guessing.',
+    // This label is visible as the collapsed plan line, so it reads as
+    // disclosure, not as an internal routing log entry.
+    summary: 'Answered directly from your records — no single specialist owned this one.',
     body,
     references: mem.slice(0, 2).map((m) => ref('memory', m, m.item.text.slice(0, 48))),
     outputs: new Map([['chief-of-staff', 'Took it directly; no specialist clearly owned it.']]),
+    orientation: true,
   };
 };
 
