@@ -7,6 +7,7 @@ import {
   MCP_AUTONOMY,
   MCP_PRESETS,
   MCP_TRANSPORTS,
+  credentialShape,
   isValidServerId,
   referencedSecretNames,
 } from '@/lib/domain';
@@ -166,6 +167,25 @@ export async function saveMcpServer(
   }
 
   const input = parsed.data;
+
+  // A connection's env values and headers persist to workspace.json and are
+  // read back as page props. A raw credential pasted here would sit in plaintext
+  // on disk and echo into the browser — the vault exists precisely so it never
+  // does. Refuse a credential-shaped value and point at the placeholder form.
+  const rawValues = [
+    ...Object.values(input.transport === 'stdio' ? input.env : {}),
+    ...Object.values(input.transport === 'http' ? input.headers : {}),
+  ];
+  for (const value of rawValues) {
+    const shape = credentialShape(value);
+    if (shape) {
+      return {
+        ok: false,
+        message: `That looks like it contains a ${shape}. Store it in the vault — Keys and secrets — and reference it here as {{secret:NAME}} instead of pasting the value.`,
+      };
+    }
+  }
+
   const now = new Date().toISOString();
   const workspace = await getWorkspace();
   const existing = workspace.mcpServers.find((server) => server.id === input.id);
@@ -246,10 +266,18 @@ export async function addMcpPreset(presetId: string): Promise<McpFormState> {
 }
 
 export async function removeMcpServer(serverId: string): Promise<void> {
+  const now = new Date().toISOString();
   await saveWorkspace((current) => ({
     ...current,
     mcpServers: current.mcpServers.filter((server) => server.id !== serverId),
     mcpStates: current.mcpStates.filter((state) => state.serverId !== serverId),
+    // Revoke this server's standing grants, don't leave them live. Server ids are
+    // reused (re-adding a preset reuses its id), so a dormant grant would silently
+    // apply to a different connection the founder later stands up under that id.
+    // Revoked, never deleted: calls that ran under it still reference it by id.
+    grants: current.grants.map((grant) =>
+      grant.serverId === serverId && !grant.revokedAt ? { ...grant, revokedAt: now } : grant,
+    ),
   }));
   revalidatePath('/', 'layout');
 }

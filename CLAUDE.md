@@ -19,7 +19,7 @@ way it is, before changing anything structural.
 
 If those disagree, the code is right and the docs need fixing — say so.
 
-## The five invariants
+## The six invariants
 
 These are the product. Breaking one is never a refactor, it is a regression.
 

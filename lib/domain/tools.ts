@@ -147,6 +147,19 @@ export interface ToolContext {
    * written back into the ToolCall record.
    */
   readonly resolveSecrets: (value: string) => Promise<string>;
+  /**
+   * A per-call discriminator mixed into every record id the executor mints.
+   *
+   * The acting loop freezes `now` for a whole turn (it must, or a generator
+   * would read the clock), so two same-titled creations in one turn — "create a
+   * task called X" twice, or a meeting plan with two identical tasks — seeded
+   * ids from scope+time+title alone and collided. `insertRecords` then wrote the
+   * duplicate and `updateRecord`/`removeRecord` would later hit the wrong one.
+   * The ToolCall id is unique per call (it already carries the sequence), so
+   * threading it here makes every minted id unique without touching determinism:
+   * the same call in a test still produces the same id.
+   */
+  readonly callId?: string;
 }
 
 export type ToolExecutor = (ctx: ToolContext, args: ToolArgs) => Promise<ToolOutcome>;

@@ -85,7 +85,7 @@ the public internet at all.
 ## 6 · Verify
 
 ```sh
-launchctl list | grep omnios                      # three services, exit code 0
+launchctl list | grep omnios                      # server, heartbeat, backup (+ tunnel on Cloudflare), exit code 0
 lsof -nP -iTCP -sTCP:LISTEN | grep node           # ONLY 127.0.0.1:3000 — nothing else
 ops/heartbeat.sh && tail -1 ~/Library/Logs/omnios/heartbeat.log   # "OK"
 curl -s -o /dev/null -w '%{http_code}\n' https://YOUR_URL/        # 307 → /login

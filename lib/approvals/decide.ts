@@ -82,7 +82,7 @@ export async function approveToolCallAs(
 
   const outcome = await runTool(
     call.toolId,
-    { scope, now, actor: decidedBy, resolveSecrets },
+    { scope, now, actor: decidedBy, resolveSecrets, callId: toolCallId },
     call.args,
     { approval: { decidedBy, decidedAt } },
   );

@@ -188,7 +188,14 @@ export function MeetingRoom({
           setDraft('');
           startTransition(async () => {
             const result = await speakInMeeting(scopeKey, active.id, text, addressee || undefined);
-            setError(result.ok ? null : (result.error ?? 'That did not reach the room.'));
+            if (!result.ok) {
+              // Restore the message on failure — a closed meeting or a
+              // credential-shaped turn should not swallow what the founder typed.
+              setDraft(text);
+              setError(result.error ?? 'That did not reach the room.');
+            } else {
+              setError(null);
+            }
           });
         }}
       >

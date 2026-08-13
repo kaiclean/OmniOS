@@ -171,13 +171,16 @@ export async function approveMeetingPlan(
   // would be the system lying about its own state.
   let created = 0;
   let queued = 0;
-  for (const task of meeting.plan.tasks) {
+  for (const [index, task] of meeting.plan.tasks.entries()) {
     const outcome = await proposeCore(scope, 'create_task', {
       title: task.title,
       capabilityId: task.capabilityId,
       status: 'next',
       notes: `From the meeting “${meeting.topic}” — owner: ${task.ownerSpecialistId}.`,
-    }, { now });
+      // `now` is frozen for the whole approval, so two identically-titled plan
+      // tasks would mint the same ToolCall id (and the same task id) without a
+      // per-task discriminator — the documented duplicate-key bug, reintroduced.
+    }, { now, sequence: index });
     if (outcome.awaitingApproval) queued += 1;
     else if (outcome.ok) created += 1;
     tasksWithIds.push({ ...task, ...(outcome.affectedIds?.[0] ? { taskId: outcome.affectedIds[0] } : {}) });

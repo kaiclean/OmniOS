@@ -235,10 +235,10 @@ Panels are scope-agnostic renderers. A panel asks for "tasks in this scope", nev
 company and a life without a branch — and why adding a capability is a registry
 edit, not a feature.
 
-**Fourteen capabilities ship:** Strategy · Marketing · Sales · Branding ·
+**Thirteen company capabilities ship:** Strategy · Marketing · Sales · Branding ·
 Development · Finance · Operations · People · Legal · Research · Creative Studio ·
-Automation · Executive — plus Health, Relationships, Learning and Life Admin,
-which apply to personal life only.
+Automation · Executive — plus four for personal life only: Health, Relationships,
+Learning and Life Admin. Seventeen in the registry.
 
 ---
 
@@ -422,10 +422,14 @@ layout enforces today. `memory.embedding` becomes a `vector` column.
 
 ## 20. API and service architecture
 
-V1 has no HTTP API by design: Server Actions are the boundary, which removes an
-entire class of endpoint-authorisation bugs while there is one user. When a
-second surface appears (mobile), the action bodies move behind route handlers
-that take the same validated inputs.
+Server Actions are the primary boundary — that removes an entire class of
+endpoint-authorisation bugs while there is one user. The few HTTP routes that
+exist are the ones that genuinely need to be reached from outside a browser
+session, and each carries its own authentication: `/api/telegram/webhook`
+(Telegram's secret-token header), `/api/health` (the access key as a header,
+for the heartbeat), and `/api/brain-graph` (behind the session cookie via
+`proxy.ts`). The access gate in `lib/auth/paths.ts` places every route except
+the self-authenticating ones inside the boundary.
 
 ---
 

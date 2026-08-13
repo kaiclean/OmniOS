@@ -143,7 +143,7 @@ export async function proposeCore(
   if (gated && grant) {
     const outcome = await runTool(
       toolId,
-      { scope, now, actor: 'founder', resolveSecrets },
+      { scope, now, actor: 'founder', resolveSecrets, callId: id },
       validation.coerced,
       // The decision the gate requires is the grant itself: who decided is the
       // founder, when is the moment they granted it, and the call names it.
@@ -191,7 +191,7 @@ export async function proposeCore(
     };
   }
 
-  const outcome = await runTool(toolId, { scope, now, actor: 'founder', resolveSecrets }, validation.coerced);
+  const outcome = await runTool(toolId, { scope, now, actor: 'founder', resolveSecrets, callId: id }, validation.coerced);
   const call: ToolCall = {
     ...base,
     status: outcome.ok ? 'executed' : 'failed',

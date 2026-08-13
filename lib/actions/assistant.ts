@@ -11,6 +11,7 @@ import { activeProvider } from '@/lib/ai/providers';
 import { getCapability } from '@/lib/capabilities/registry';
 import { derivePageContext } from '@/lib/ui/page-context';
 import { credentialShape } from '@/lib/domain';
+import { getWorkspace } from '@/lib/data/store';
 
 export interface AssistantTurn {
   readonly ok: boolean;
@@ -26,20 +27,27 @@ export interface AssistantTurn {
  * to founder mode rather than throwing, because an assistant that refuses to
  * answer because of a routing detail is worse than one that answers broadly.
  */
-function resolveTarget(targetKey: string, pathname?: string): AssistantTarget {
+async function resolveTarget(targetKey: string, pathname?: string): Promise<AssistantTarget> {
   // The page is re-derived from the pathname here, never accepted as an object:
   // a crafted payload cannot claim a capability the route does not have, and an
   // id that names no real capability is dropped rather than echoed into prompts.
   const page = pathname ? derivePageContext(pathname.slice(0, 300)) : undefined;
   const checked =
     page && (!page.capabilityId || getCapability(page.capabilityId)) ? page : undefined;
+  const founder: AssistantTarget = { kind: 'founder', ...(checked ? { page: checked } : {}) };
 
-  if (!targetKey || targetKey === 'founder' || targetKey === 'os') {
-    return { kind: 'founder', ...(checked ? { page: checked } : {}) };
-  }
+  if (!targetKey || targetKey === 'founder' || targetKey === 'os') return founder;
   const scope = parseScopeKey(targetKey);
-  if (!scope || scope.kind === 'shared') {
-    return { kind: 'founder', ...(checked ? { page: checked } : {}) };
+  if (!scope || scope.kind === 'shared') return founder;
+
+  // Parsing is not existence. An invented or deleted `company:ghost` parses
+  // cleanly, and answering in it would create an orphan scope file for a company
+  // nobody owns. A company target must name a live, non-archived company;
+  // anything else falls back to the founder surface rather than writing there.
+  if (scope.kind === 'company') {
+    const workspace = await getWorkspace();
+    const exists = workspace.companies.some((c) => c.id === scope.companyId && !c.archivedAt);
+    if (!exists) return founder;
   }
   return { kind: 'space', scope, ...(checked ? { page: checked } : {}) };
 }
@@ -78,7 +86,7 @@ export async function askAssistant(
   try {
     const thread = sanitiseChannel(channel);
     const { message } = await ask(
-      resolveTarget(targetKey, pathname),
+      await resolveTarget(targetKey, pathname),
       trimmed,
       new Date(),
       thread ? { channel: thread } : {},
@@ -97,11 +105,11 @@ export async function loadConversation(
   targetKey: string,
   channel?: string,
 ): Promise<AssistantMessage[]> {
-  return conversation(resolveTarget(targetKey), sanitiseChannel(channel));
+  return conversation(await resolveTarget(targetKey), sanitiseChannel(channel));
 }
 
 export async function loadThreads(targetKey: string): Promise<ThreadSummary[]> {
-  return listThreads(resolveTarget(targetKey));
+  return listThreads(await resolveTarget(targetKey));
 }
 
 export async function providerLabel(): Promise<{ label: string; simulated: boolean }> {

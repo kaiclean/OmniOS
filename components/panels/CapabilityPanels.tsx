@@ -934,7 +934,12 @@ function HealthPanel({ title, span, ctx }: SimplePanelProps) {
   const energy = energyOf(latest);
   const breakdown = deriveEnergy(latest);
   const avgSleep = week.reduce((s, d) => s + (d.sleepHours ?? 0), 0) / (week.length || 1);
-  const energySeries = tracked.slice(-28).map((d) => energyOf(d) ?? 0);
+  // Drop days whose energy cannot be derived rather than plotting them as 0 —
+  // a zero draws a crash that never happened. Absence leaves a gap, not a dip.
+  const energySeries = tracked
+    .slice(-28)
+    .map((d) => energyOf(d))
+    .filter((value): value is number => value !== null);
 
   return (
     <Panel

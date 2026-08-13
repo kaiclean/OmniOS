@@ -240,3 +240,31 @@ describe('deleting by name, which is the only way a founder ever says it', () =>
     expect(tasks.filter((task) => task.title.startsWith('Alpha report'))).toHaveLength(2);
   }, 30_000);
 });
+
+describe('a frozen-clock turn never mints two records with one id', () => {
+  it('creates two same-titled tasks in one turn as two distinct records', async () => {
+    const AT_NOON = new Date('2026-08-07T12:00:00.000Z');
+    // One turn, one frozen clock, the same title twice. Before callId was mixed
+    // into the executor's id seed, both tasks hashed to one id and the second
+    // silently overwrote the first (or broke the approvals list's React keys).
+    const { provider } = scripted([
+      [
+        { name: 'create_task', args: { title: 'Weekly review' } },
+        { name: 'create_task', args: { title: 'Weekly review' } },
+      ],
+      [],
+    ]);
+    const result = await loop.runActLoop('add two weekly review tasks', {
+      scope: personalScope(),
+      provider,
+      now: AT_NOON,
+    });
+    expect(result.steps).toHaveLength(2);
+    expect(result.steps.every((s) => s.ok)).toBe(true);
+
+    const tasks = await store.readCollection(personalScope(), 'tasks');
+    const mine = tasks.filter((t) => t.title === 'Weekly review');
+    expect(mine).toHaveLength(2);
+    expect(new Set(mine.map((t) => (t as { id: string }).id)).size).toBe(2);
+  }, 30_000);
+});
