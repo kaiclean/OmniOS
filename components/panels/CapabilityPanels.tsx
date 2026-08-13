@@ -488,8 +488,8 @@ function FinanceSummaryPanel({ title, span, ctx }: SimplePanelProps) {
   const revenue = sum(actuals, 'in');
   const costs = sum(actuals, 'out');
   const profit = revenue - costs;
-  const months = new Set(actuals.map((e) => e.date.slice(0, 7))).size || 1;
-  const burn = costs / months;
+  const months = new Set(actuals.map((e) => e.date.slice(0, 7))).size;
+  const burn = months > 0 ? costs / months : 0;
   const runway = burn > 0 ? profit / burn : null;
 
   const byMonth = new Map<string, number>();
@@ -500,30 +500,43 @@ function FinanceSummaryPanel({ title, span, ctx }: SimplePanelProps) {
   }
   const trend = [...byMonth.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([, v]) => v / 100);
 
+  // An empty ledger is absence, not CHF 0 — a real company opens at an em dash
+  // and earns its first number by recording it.
+  const none = actuals.length === 0;
   return (
     <Panel
       title={title}
       span={span}
-      subtitle={`${months} months of actuals · ${forecast.length} forecast entries excluded`}
+      subtitle={
+        none
+          ? 'No entries yet — the first recorded entry starts the position'
+          : `${pluralise(months, 'month')} of actuals · ${forecast.length} forecast entries excluded`
+      }
     >
       <MetricGrid>
         <Metric
           label="Revenue"
-          value={formatMinorAmount(revenue, currency, { compact: true })}
-          hint={`${months} months`}
+          value={none ? EMPTY : formatMinorAmount(revenue, currency, { compact: true })}
+          hint={none ? 'nothing recorded' : pluralise(months, 'month')}
         />
-        <Metric label="Costs" value={formatMinorAmount(costs, currency, { compact: true })} hint={`${months} months`} />
+        <Metric
+          label="Costs"
+          value={none ? EMPTY : formatMinorAmount(costs, currency, { compact: true })}
+          hint={none ? 'nothing recorded' : pluralise(months, 'month')}
+        />
         <Metric
           label="Net"
-          value={formatMinorAmount(profit, currency, { compact: true })}
-          delta={{ text: profit >= 0 ? 'positive' : 'negative', tone: profit >= 0 ? 'good' : 'bad' }}
+          value={none ? EMPTY : formatMinorAmount(profit, currency, { compact: true })}
+          {...(none
+            ? {}
+            : { delta: { text: profit >= 0 ? 'positive' : 'negative', tone: profit >= 0 ? ('good' as const) : ('bad' as const) } })}
           series={trend}
           hint="Monthly net"
         />
         <Metric
           label="Runway at this burn"
           value={runway === null ? EMPTY : `${formatNumber(runway, 1)} mo`}
-          hint={`${formatMinorAmount(Math.round(burn), currency, { compact: true })}/mo`}
+          hint={none ? 'no burn recorded' : `${formatMinorAmount(Math.round(burn), currency, { compact: true })}/mo`}
         />
       </MetricGrid>
     </Panel>
@@ -921,7 +934,12 @@ function HealthPanel({ title, span, ctx }: SimplePanelProps) {
   const energy = energyOf(latest);
   const breakdown = deriveEnergy(latest);
   const avgSleep = week.reduce((s, d) => s + (d.sleepHours ?? 0), 0) / (week.length || 1);
-  const energySeries = tracked.slice(-28).map((d) => energyOf(d) ?? 0);
+  // Drop days whose energy cannot be derived rather than plotting them as 0 —
+  // a zero draws a crash that never happened. Absence leaves a gap, not a dip.
+  const energySeries = tracked
+    .slice(-28)
+    .map((d) => energyOf(d))
+    .filter((value): value is number => value !== null);
 
   return (
     <Panel

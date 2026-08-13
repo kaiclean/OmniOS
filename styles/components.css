@@ -1262,3 +1262,20 @@
   background: rgba(5, 6, 10, 0.88);
   font-size: var(--fs-small);
 }
+
+/* ------------------------------------------------------------- login ----- */
+/* The unlock screen renders outside the shell, so it needs its own centring —
+   nothing else in the app lays out a lone card on a bare canvas. */
+.login {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--s-6);
+}
+.login-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  width: 100%;
+  max-width: 22rem;
+}

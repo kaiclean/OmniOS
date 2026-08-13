@@ -22,6 +22,8 @@ export interface CopilotProps {
   suggestions: readonly string[];
   /** Empty-state chips when the founder is inside a company. */
   companySuggestions: readonly string[];
+  /** Dismisses the mobile sheet; the shell owns that state. */
+  onCloseSheet?: () => void;
 }
 
 /**
@@ -40,6 +42,7 @@ export function Copilot({
   personalName,
   suggestions,
   companySuggestions,
+  onCloseSheet,
 }: CopilotProps) {
   const pathname = usePathname();
   const page = useMemo(() => derivePageContext(pathname), [pathname]);
@@ -53,6 +56,21 @@ export function Copilot({
   const [channel, setChannel] = useState('');
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The shell layout renders once and seeds `initialMessages` from the founder
+  // surface, so on a company page the panel opened showing the founder-wide
+  // conversation. It's the founder's own data, not another space's — but it is
+  // the wrong thread. `initialMessages` always belongs to 'founder', so a deep
+  // link straight into a company (targetKey ≠ 'founder') also triggers the load.
+  const seededFor = useRef('founder');
+  useEffect(() => {
+    if (seededFor.current === targetKey) return;
+    seededFor.current = targetKey;
+    setChannel('');
+    setError(null);
+    startTransition(async () => {
+      setMessages(await loadConversation(targetKey, undefined));
+    });
+  }, [targetKey]);
 
   const scopeLabel = useMemo(() => {
     if (targetKey === 'founder') return 'Everything';
@@ -189,6 +207,14 @@ export function Copilot({
         >
           <Icon name="plus" size={13} />
         </button>
+        <button
+          className="btn btn--ghost btn--icon btn--sm copilot-close"
+          type="button"
+          aria-label="Close assistant"
+          onClick={onCloseSheet}
+        >
+          <Icon name="close" size={13} />
+        </button>
       </header>
 
       <div className="copilot-scroll" ref={scrollRef}>
@@ -304,6 +330,13 @@ function Message({ message }: { message: AssistantMessage }) {
   return (
     <div className={`msg msg--${isFounder ? 'founder' : 'assistant'}`}>
       <div className="msg-body">{message.text}</div>
+      {/* The simulated mark rides on the message, not on whether a plan is
+          attached: a command receipt ("/task …") is locally generated and
+          carries no plan, and nesting the mark inside the plan branch dropped it
+          from exactly those replies. */}
+      {!isFounder && message.simulated && !message.plan ? (
+        <span className="sim-mark">Generated locally from your records</span>
+      ) : null}
       {!isFounder && message.plan ? (
         <>
           <details className="plan">

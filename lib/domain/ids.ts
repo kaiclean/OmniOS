@@ -51,7 +51,16 @@ export function makeId(name: string, seed: string = name): string {
   return `${base}-${shortSuffix(`${base}:${seed}`)}`;
 }
 
-/** An opaque id for records with no natural name (log lines, runs, messages). */
+/**
+ * An opaque id for records with no natural name (log lines, runs, messages).
+ *
+ * Two independent 32-bit hashes of the seed — the raw seed and a salted seed —
+ * give ~64 bits of entropy. The original form derived the suffix from the *same*
+ * hash32 as the body, so it added no independent bits: distinct seeds that
+ * happened to share a 32-bit hash produced identical ids, and `updateRecord` /
+ * `removeRecord` would then hit an unrelated record. `hash32` itself is
+ * untouched (its stability guarantee governs space tints and `makeId`).
+ */
 export function makeRecordId(prefix: string, seed: string): string {
-  return `${prefix}_${hash32(seed).toString(36)}${shortSuffix(seed)}`;
+  return `${prefix}_${hash32(seed).toString(36)}${hash32(`salt:${seed}`).toString(36)}`;
 }

@@ -1,0 +1,9 @@
+# Copy to ~/.cloudflared/config.yml after `cloudflared tunnel create omnios`.
+# The tunnel terminates at loopback: the server never listens beyond this Mac.
+tunnel: omnios
+credentials-file: /Users/YOUR_USER/.cloudflared/YOUR_TUNNEL_ID.json
+
+ingress:
+  - hostname: os.your-domain.com
+    service: http://127.0.0.1:3000
+  - service: http_status:404

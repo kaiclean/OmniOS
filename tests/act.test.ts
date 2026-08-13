@@ -54,7 +54,9 @@ describe('the local acting path', () => {
   it('refuses to plan a call whose required arguments the founder never said', () => {
     const decision = detectActLocally('create a task', scope, NOW);
     expect(decision.calls).toHaveLength(0);
-    expect(decision.note).toMatch(/title/);
+    // The missing piece is named in the founder's language, from the param's
+    // own description — never as a bare parameter name.
+    expect(decision.note).toMatch(/what needs doing/i);
   });
 
   it('can only ever plan; a gated tier still needs the gate', () => {
@@ -123,5 +125,41 @@ describe('the catalogue offers provider-legal names and resolves them back', () 
     const catalogue = toolCatalogue([...TOOLS]);
     expect(catalogue.byName.get('mcp_filesystem_read_file')).toBeUndefined();
     expect(catalogue.byName.size).toBe(catalogue.schemas.length);
+  });
+});
+
+describe('commands are spoken singular; collections are stored plural', () => {
+  it('resolves "the task" to the tasks collection and flags a command', () => {
+    const decision = detectActLocally('delete the task "Ship the deck"', scope, NOW);
+    expect(decision.mode).toBe('act');
+    expect(decision.intent).toBe('command');
+    const call = decision.calls[0]!;
+    expect(call.toolId).toBe('delete_record');
+    expect(call.args['collection']).toBe('tasks');
+    expect(call.args['recordId']).toBe('Ship the deck');
+  });
+
+  it('never lets a collection word hiding inside the quoted title pick the collection', () => {
+    const decision = detectActLocally('delete that "goal notes"', scope, NOW);
+    expect(decision.mode).toBe('answer');
+    expect(decision.note).toMatch(/which collection/i);
+  });
+
+  it('recognises reset as an imperative and extracts the capability', () => {
+    const decision = detectActLocally('reset the marketing capability data', scope, NOW);
+    expect(decision.mode).toBe('act');
+    expect(decision.intent).toBe('command');
+    const call = decision.calls[0]!;
+    expect(call.toolId).toBe('reset_capability_data');
+    expect(call.args['capabilityId']).toBe('marketing');
+  });
+
+  it('names what is missing in founder language, never raw parameter names', () => {
+    const decision = detectActLocally('delete that "Old scribble"', scope, NOW);
+    expect(decision.mode).toBe('answer');
+    expect(decision.intent).toBe('command');
+    // "collection" alone is our word; the founder gets the description.
+    expect(decision.note).toMatch(/which collection the record is in/i);
+    expect(decision.note).not.toMatch(/\bneed collection\b/);
   });
 });

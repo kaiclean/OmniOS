@@ -57,7 +57,7 @@ machines. See `.env.example` for every seam an integration can plug into.
 | **Companies** | A create form produces a complete headquarters: DNA, brand, competitors, KPIs, roadmap, ledger, CRM, SOPs, automations, risks, recommendations |
 | **Company HQ** | Executive Overview plus 13 capability pages, all registry-driven |
 | **Personal HQ** | Personal DNA, Life Overview, Health & Performance, Relationships, Learning, Life Admin |
-| **Capabilities** | 14 reusable platforms, granted to every space automatically, viewable per space or across all of them |
+| **Capabilities** | 13 reusable company platforms granted to every company automatically, plus 4 for personal life, viewable per space or across all of them |
 | **Assistant** | One surface, ~25 specialists behind it, with the delegation plan and evidence always inspectable |
 | **Brain** | Three memory scopes with a gated promotion path into shared knowledge |
 | **Intelligence** | Discovery feed with relevance scoring, and a Safe Upgrade Pipeline that never applies itself |
@@ -127,19 +127,32 @@ An instrument, not a dashboard.
 ## Layout
 
 ```
+proxy.ts           the edge access gate (Next 16's middleware successor)
 app/(os)/          routes — the OS shell wraps every one
+app/login/         the unlock screen, outside the (os) shell
+app/api/           self-authenticating routes: telegram/webhook, health, brain-graph
 components/
   shell/           rail, overview strip, copilot, command palette  (client)
   panels/          the capability panel renderer                   (server)
+  approvals/ agents/ meetings/ connections/                        (interaction)
   ui/              primitives and the hand-drawn icon set
 lib/
   domain/          types + the scope boundary
+  auth/            session tokens, protection predicate, rate limit
   capabilities/    the registry
   data/            store port, filesystem adapter, seeds, aggregation
   generation/      deterministic HQ / life / intelligence / product plans
-  ai/              specialists, router, context, composers, providers
+  ai/              specialists, router, context, composers, providers, tools
+  approvals/       the deciding half of the gate
+  business/        the launch playbook
+  secrets/         the encrypted vault
+  mcp/             MCP client + probe
+  telegram/        bot + approval delivery
+  brain/           the 3D brain graph model
+  learning/        loop findings and reports
   personal/        energy derivation
   actions/         every mutation, as Server Actions
+ops/               the Mac runbook: setup, tunnel, heartbeat, backup, launchd
 styles/            tokens, base, shell, components
 tests/             logic-layer tests (vitest, node)
 ```

@@ -16,7 +16,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import type { WorkspaceStore } from '../store-port';
 import type { ScopeData, WorkspaceRoot } from '../schema';
-import { normaliseScopeData } from '../schema';
+import { emptyScopeData, normaliseRoot, normaliseScopeData } from '../schema';
 import type { Scope } from '@/lib/domain';
 import { scopeKey } from '@/lib/domain';
 
@@ -93,6 +93,18 @@ export const fileSystemStore: WorkspaceStore = {
     await serialise(path, () => writeJsonAtomic(path, root));
   },
 
+  async mutateRoot(transform) {
+    const path = rootFilePath();
+    // The read is inside serialise, so a second mutateRoot queued behind this
+    // one reads the value this one just wrote — never the stale pre-write copy.
+    return serialise(path, async () => {
+      const raw = await readJson<WorkspaceRoot>(path);
+      const next = transform(raw === null ? null : normaliseRoot(raw));
+      await writeJsonAtomic(path, next);
+      return next;
+    });
+  },
+
   async readScope(scope) {
     const raw = await readJson<unknown>(scopeFilePath(scope));
     return raw === null ? null : normaliseScopeData(raw);
@@ -101,6 +113,17 @@ export const fileSystemStore: WorkspaceStore = {
   async writeScope(scope, data: ScopeData) {
     const path = scopeFilePath(scope);
     await serialise(path, () => writeJsonAtomic(path, data));
+  },
+
+  async mutateScope(scope, transform) {
+    const path = scopeFilePath(scope);
+    return serialise(path, async () => {
+      const raw = await readJson<unknown>(path);
+      const current = raw === null ? emptyScopeData() : normaliseScopeData(raw);
+      const next = transform(current);
+      await writeJsonAtomic(path, next);
+      return next;
+    });
   },
 
   async dropScope(scope) {

@@ -35,6 +35,15 @@ import { recallAcrossSpaces, type SpaceRecallSource } from './recall';
 import { NOT_WIRED_TOOL_IDS } from './tools/executors';
 
 /**
+ * Founder-mode conversations store in the personal scope (it is the founder's
+ * own surface) but on a reserved channel, so the "Everything" thread and the
+ * personal space's own main thread stay distinct. Without it, a question asked
+ * on the OS surface surfaced inside the personal space's copilot and vice
+ * versa. It is not a `thread:` channel, so it never appears as a named thread.
+ */
+const FOUNDER_CHANNEL = 'founder';
+
+/**
  * Assemble the context a target is allowed to see.
  *
  * Space mode reads exactly one space. Founder mode reads every space the founder
@@ -295,6 +304,12 @@ export async function ask(
     outputs: composition.outputs,
   });
 
+  // A command gets a receipt, not a briefing. Observed live: "/task …" was
+  // confirmed in one line and then buried under a marketing report, because the
+  // composition was appended to every reply regardless of what the founder
+  // asked for. When the turn was an instruction, what happened *is* the answer.
+  const commandTurn = slash !== null || loopResult?.intent === 'command';
+
   let text = composition.body;
   let simulated = true;
   let tokensIn: number | undefined;
@@ -312,7 +327,7 @@ export async function ask(
           .join('\n')}`
       : '';
 
-  if (!provider.simulated) {
+  if (!provider.simulated && !commandTurn) {
     try {
       const workspace = await getWorkspace();
       const response = await provider.complete({
@@ -365,12 +380,18 @@ export async function ask(
     }
   }
 
-  if (actLines.length > 0) {
+  if (commandTurn && actLines.length > 0) {
+    text = actLines.join('\n');
+  } else if (actLines.length > 0) {
     text = `${actLines.join('\n')}\n\n${text}`;
   }
 
   const finishedAt = new Date().toISOString();
   const storageScope = target.kind === 'founder' ? personalScope() : target.scope;
+  // A named thread keeps its own id; the main thread of founder mode is the
+  // reserved channel, and of a space is no channel at all.
+  const storedChannel =
+    options.channel ?? (target.kind === 'founder' ? FOUNDER_CHANNEL : undefined);
   const seed = `${targetKey(target)}:${startedAt}:${prompt}`;
 
   const message: AssistantMessage = {
@@ -381,10 +402,12 @@ export async function ask(
     role: 'assistant',
     text,
     at: finishedAt,
-    plan,
+    // A command's reply is a receipt; attaching the routing plan would claim
+    // specialists were consulted on an instruction none of them touched.
+    ...(commandTurn ? {} : { plan }),
     simulated,
     providerId: provider.id,
-    ...(options.channel ? { channel: options.channel } : {}),
+    ...(storedChannel ? { channel: storedChannel } : {}),
   };
 
   const founderMessage: AssistantMessage = {
@@ -397,7 +420,7 @@ export async function ask(
     at: startedAt,
     simulated: false,
     providerId: provider.id,
-    ...(options.channel ? { channel: options.channel } : {}),
+    ...(storedChannel ? { channel: storedChannel } : {}),
   };
 
   const run: AgentRun = {
@@ -456,8 +479,11 @@ export async function conversation(
 ): Promise<AssistantMessage[]> {
   const scope = target.kind === 'founder' ? personalScope() : target.scope;
   const data = await readScope(scope);
+  // The main thread means the reserved founder channel on the OS surface, and no
+  // channel in a space — so the two never bleed into each other.
+  const effectiveChannel = channel ?? (target.kind === 'founder' ? FOUNDER_CHANNEL : undefined);
   return data.messages
-    .filter((message) => (channel ? message.channel === channel : !message.channel))
+    .filter((message) => (effectiveChannel ? message.channel === effectiveChannel : !message.channel))
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 

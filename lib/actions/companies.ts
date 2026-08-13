@@ -83,7 +83,8 @@ export async function createCompany(
   };
 
   const workspace = await getWorkspace();
-  const { company, data } = generateCompanyWorkspace(draft);
+  const cleanSlate = form.get('cleanSlate') === 'on';
+  const { company, data } = generateCompanyWorkspace(draft, new Date(), { cleanSlate });
 
   if (workspace.companies.some((existing) => existing.id === company.id)) {
     return {

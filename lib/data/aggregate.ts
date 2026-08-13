@@ -79,6 +79,10 @@ export interface MoneyRollup {
   readonly outMinor: number;
   readonly netMinor: number;
   readonly currency: CurrencyCode;
+  /** How many ledger rows the sums are made of — zero means the figures are absence, not CHF 0. */
+  readonly entries: number;
+  /** True when any counted row was invented by a generator; the UI must say so. */
+  readonly includesSimulated: boolean;
 }
 
 /**
@@ -92,16 +96,20 @@ export function moneyThisMonth(spaces: readonly SpaceView[], now = new Date()): 
   let inMinor = 0;
   let outMinor = 0;
   let currency: CurrencyCode = 'CHF';
+  let entries = 0;
+  let includesSimulated = false;
   for (const space of spaces) {
     for (const entry of space.data.finance) {
       if (!entry.date.startsWith(key)) continue;
       if (entry.confidence === 'forecast') continue;
       currency = entry.amount.currency;
+      entries += 1;
+      if (entry.simulated) includesSimulated = true;
       if (entry.direction === 'in') inMinor += entry.amount.amount;
       else outMinor += entry.amount.amount;
     }
   }
-  return { inMinor, outMinor, netMinor: inMinor - outMinor, currency };
+  return { inMinor, outMinor, netMinor: inMinor - outMinor, currency, entries, includesSimulated };
 }
 
 export interface OverviewSnapshot {

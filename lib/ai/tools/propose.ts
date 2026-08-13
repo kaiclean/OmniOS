@@ -16,6 +16,7 @@ import {
   grantCovers,
   makeRecordId,
   parseMcpToolId,
+  referencedSecretNames,
   requiresApproval,
   scopeKey,
   validateArgs,
@@ -76,7 +77,19 @@ export async function proposeCore(
 
   const validation = validateArgs(tool, raw);
   const workspace = await getWorkspace();
-  const gated = requiresApproval(tool.risk, { confirmWrites: workspace.settings.confirmWrites });
+
+  // A call that carries vault plaintext out of OmniOS is a decision the founder
+  // must make, whatever tier the tool sits at. Without this a remote tool that
+  // classified as `read` — and every remote string param accepts a secret —
+  // could run autonomously with `{{secret:X}}` in a URL and exfiltrate the
+  // plaintext with no record that anyone approved it. A secret reference in any
+  // argument forces the gate; the tier can only ever make it stricter, never
+  // looser, which is the one direction the approval policy is allowed to move.
+  const carriesSecret = Object.values(validation.coerced).some(
+    (value) => typeof value === 'string' && referencedSecretNames(value).length > 0,
+  );
+  const gated =
+    carriesSecret || requiresApproval(tool.risk, { confirmWrites: workspace.settings.confirmWrites });
 
   const id = makeRecordId(
     'call',
@@ -130,7 +143,7 @@ export async function proposeCore(
   if (gated && grant) {
     const outcome = await runTool(
       toolId,
-      { scope, now, actor: 'founder', resolveSecrets },
+      { scope, now, actor: 'founder', resolveSecrets, callId: id },
       validation.coerced,
       // The decision the gate requires is the grant itself: who decided is the
       // founder, when is the moment they granted it, and the call names it.
@@ -178,7 +191,7 @@ export async function proposeCore(
     };
   }
 
-  const outcome = await runTool(toolId, { scope, now, actor: 'founder', resolveSecrets }, validation.coerced);
+  const outcome = await runTool(toolId, { scope, now, actor: 'founder', resolveSecrets, callId: id }, validation.coerced);
   const call: ToolCall = {
     ...base,
     status: outcome.ok ? 'executed' : 'failed',

@@ -65,7 +65,14 @@ export function AgentChat({
           setDraft('');
           startTransition(async () => {
             const result = await speakToAgent(scopeKey, agentId, text);
-            setError(result.ok ? null : (result.error ?? 'That did not go through.'));
+            if (!result.ok) {
+              // Give the words back — a rejected turn (credential-shaped input,
+              // a closed space) should not also cost the founder their message.
+              setDraft(text);
+              setError(result.error ?? 'That did not go through.');
+            } else {
+              setError(null);
+            }
           });
         }}
       >

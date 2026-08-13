@@ -155,6 +155,7 @@ export function buildInitialWorkspace(now: Date = new Date()): InitialWorkspace 
     mcpStates: [],
     grants: [],
     telegram: DEFAULT_TELEGRAM_CONFIG,
+    lastHeartbeatAt: null,
   };
 
   return { root, scopes };
@@ -176,6 +177,7 @@ export function buildEmptyWorkspace(displayName = 'Kai', now: Date = new Date())
     mcpStates: [],
     grants: [],
     telegram: DEFAULT_TELEGRAM_CONFIG,
+    lastHeartbeatAt: null,
   };
   return { root, scopes: [[personalScope(), emptyScopeData()] as const] };
 }

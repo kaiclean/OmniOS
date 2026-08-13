@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { Meeting, MeetingTurn, Scope } from '@/lib/domain';
-import { parseScopeKey } from '@/lib/domain';
+import { credentialShape, parseScopeKey } from '@/lib/domain';
 import { insertRecords, mutateScope, readCollection, updateRecord } from '@/lib/data/store';
 import { draftPlan, newMeeting, recommendParticipants, specialistTurn, turnContext } from '@/lib/ai/meeting';
 import { rosterFor } from '@/lib/ai/roster';
@@ -66,6 +66,17 @@ export async function speakInMeeting(
   const scope = resolveScope(scopeKeyInput);
   const trimmed = text.trim();
   if (!scope || !trimmed) return { ok: false, error: 'Say something first.' };
+
+  // A meeting turn persists to disk and is read by every participant's model —
+  // a pasted token would leak twice over. Refuse it the same way the composer
+  // does, before it is stored or sent.
+  const credential = credentialShape(trimmed);
+  if (credential) {
+    return {
+      ok: false,
+      error: `That looks like it contains a ${credential}, so I have not stored or sent it. Put it in the vault — Connections → Keys and secrets — and refer to it by name, then rotate it if it was real.`,
+    };
+  }
 
   const meeting = await findMeeting(scope, meetingId);
   if (!meeting) return { ok: false, error: 'That meeting is not in this space.' };
@@ -160,13 +171,16 @@ export async function approveMeetingPlan(
   // would be the system lying about its own state.
   let created = 0;
   let queued = 0;
-  for (const task of meeting.plan.tasks) {
+  for (const [index, task] of meeting.plan.tasks.entries()) {
     const outcome = await proposeCore(scope, 'create_task', {
       title: task.title,
       capabilityId: task.capabilityId,
       status: 'next',
       notes: `From the meeting “${meeting.topic}” — owner: ${task.ownerSpecialistId}.`,
-    }, { now });
+      // `now` is frozen for the whole approval, so two identically-titled plan
+      // tasks would mint the same ToolCall id (and the same task id) without a
+      // per-task discriminator — the documented duplicate-key bug, reintroduced.
+    }, { now, sequence: index });
     if (outcome.awaitingApproval) queued += 1;
     else if (outcome.ok) created += 1;
     tasksWithIds.push({ ...task, ...(outcome.affectedIds?.[0] ? { taskId: outcome.affectedIds[0] } : {}) });

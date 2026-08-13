@@ -143,10 +143,12 @@ const dayOf = (ctx: ToolContext): string => ctx.now.toISOString().slice(0, 10);
 
 /**
  * Ids are derived from scope, time and content rather than randomness, so the
- * same call in a test produces the same id every run.
+ * same call in a test produces the same id every run. The call id (unique per
+ * proposed call, sequence included) is mixed in so two same-titled creations
+ * within one frozen-clock turn cannot collide — see ToolContext.callId.
  */
 function newId(ctx: ToolContext, prefix: string, seed: string): string {
-  return makeRecordId(prefix, `${scopeKey(ctx.scope)}:${stampOf(ctx)}:${seed}`);
+  return makeRecordId(prefix, `${scopeKey(ctx.scope)}:${stampOf(ctx)}:${ctx.callId ?? ''}:${seed}`);
 }
 
 function base(ctx: ToolContext, prefix: string, seed: string) {
@@ -1259,7 +1261,11 @@ function smuggledSecretParams(tool: ToolDefinition, args: ToolArgs): string[] {
  * checked against the vault before it is returned.
  */
 async function scrub(tool: ToolDefinition, outcome: ToolOutcome): Promise<ToolOutcome> {
-  if (!tool.params.some((param) => param.acceptsSecret)) return outcome;
+  // Any remote call may carry a secret through an env var or a header that is
+  // not a declared param, so a param-shape check misses those. Scrub every MCP
+  // outcome; for built-ins, keep the cheap param gate.
+  const remote = parseMcpToolId(tool.id) !== null;
+  if (!remote && !tool.params.some((param) => param.acceptsSecret)) return outcome;
 
   const values = await allSecretValues();
   if (values.length === 0) return outcome;

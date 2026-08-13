@@ -173,3 +173,42 @@ with plain equality and stops a refresh silently reshuffling the founder's world
   `MemoryRecord.embedding` exists so an index can be added without a migration.
 - **Records are largely read-only in the UI.** Creation flows exist for companies,
   briefs, assets, product specs and automations; general inline editing does not.
+
+---
+
+## 5. Remote access (added with the mobile wave)
+
+- **Access-key gate, opt-in.** With `OMNIOS_ACCESS_KEY` unset nothing changes:
+  OmniOS stays a localhost app with no auth, as originally decided. Setting it
+  puts every page, Server Action and API behind a session cookie whose HMAC key
+  *derives from the access key* — rotation is revocation. The gate lives in
+  `proxy.ts` (Next 16 deprecates `middleware.ts`); the decisions live in
+  `lib/auth/paths.ts` where they are unit-tested. Exempt and self-authenticating:
+  the Telegram webhook (own secret) and `/api/health` (key as header, for the
+  heartbeat). `/api/brain-graph`, previously open, is inside the boundary.
+- **The login page reuses the root layout.** The root layout reads only three
+  cosmetic settings attributes; the workspace-rendering shell layout under
+  `(os)` never mounts pre-auth. Forking root layouts would duplicate `<html>`
+  and cause a theme flash for no security gain.
+- **Deployment is one trusted machine plus an outbound-only tunnel.** The store
+  is filesystem-based and single-process by design; serverless would break
+  writes and regenerate `.secret-key` (making every secret undecryptable). The
+  Vercel deployment is therefore a stateless demo only. Production binds
+  `127.0.0.1` (`start:local`) so the tunnel — cloudflared or Tailscale, both
+  outbound-only — is the sole way in: no listeners. See `docs/MOBILE.md` and
+  `ops/`.
+
+## 6. Durability (added with the backup wave)
+
+- **The backup unit is the whole data dir, vault key included.** A backup that
+  omitted `.secret-key` would restore secrets nobody can decrypt — worse than
+  no backup, because it looks like one. The consequence is stated where it
+  matters: an archive is exactly as sensitive as the live data (dir 700,
+  archives 600, never synced unencrypted).
+- **Restore never deletes.** `ops/restore.sh` moves the current data dir aside
+  with a timestamp; a restore can itself be undone. Retention pruning is the
+  only deletion in the pipeline and every pruned archive is logged.
+- **Plain tar over clever formats.** The data is small JSON; a format anyone
+  can open on any machine two decades from now beats deduplication a lifelong
+  OS does not need. If the data ever outgrows tar, that is a `WorkspaceStore`
+  conversation, not a backup-format one.

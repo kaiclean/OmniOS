@@ -10,7 +10,7 @@
  */
 
 import type { DateOnly, Task } from '@/lib/domain';
-import { daysBetween, formatDate, formatDurationMinutes, formatMinorAmount, pluralise } from '@/lib/format';
+import { EMPTY, daysBetween, formatDate, formatDurationMinutes, formatKpiValue, formatMinorAmount, pluralise } from '@/lib/format';
 import { deepWorkBudgetMinutes, energyLabel, energyOf } from '@/lib/personal/energy';
 import type { AssistantContext, Origin } from './context';
 import {
@@ -445,8 +445,19 @@ const composeGrowth: Composer = (ctx) => {
     ),
     section(
       'Metrics',
-      bullet(growthKpis.slice(0, 4).map((k) => `${k.item.label}: ${k.item.value}${k.item.format === 'percent' ? '%' : ''}`)) ||
-        '• No growth metrics recorded.',
+      // A KPI armed but never measured has nothing to say — an em dash, never a
+      // zero the founder might mistake for a measurement. Everything with a
+      // value goes through the one formatter money and percentages share.
+      bullet(
+        growthKpis
+          .slice(0, 4)
+          .map(
+            (k) =>
+              `${k.item.label}: ${
+                k.item.series.length <= 1 && k.item.value === 0 ? `${EMPTY} no data yet` : formatKpiValue(k.item)
+              }`,
+          ),
+      ) || '• No growth metrics recorded.',
     ),
     section(
       'Read',

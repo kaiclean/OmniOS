@@ -48,6 +48,17 @@ export async function approveAndAlwaysAllow(
     };
   }
 
+  // Approve first. A grant is a standing authorisation, and minting one for a
+  // call that turns out to be already-decided (double-click, or rejected in
+  // another tab) leaves a live grant behind a decision that never happened.
+  // Approving through the existing action keeps the per-call decision recorded
+  // exactly as before; the grant only covers the calls that come after.
+  const outcome = await approveToolCall(scope, toolCallId);
+  if (!outcome.ok) {
+    revalidatePath('/', 'layout');
+    return outcome;
+  }
+
   const now = new Date();
   const grant: PermissionGrant = {
     id: makeRecordId('grant', `${remote.serverId}:${remote.toolName}:${scopeKey(scope)}:${now.toISOString()}`),
@@ -60,10 +71,6 @@ export async function approveAndAlwaysAllow(
   };
 
   await saveWorkspace((current) => ({ ...current, grants: [...current.grants, grant] }));
-
-  // Approving through the existing action keeps the per-call decision recorded
-  // exactly as before — the grant only covers the calls that come after.
-  const outcome = await approveToolCall(scope, toolCallId);
   revalidatePath('/', 'layout');
   return outcome;
 }

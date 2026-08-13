@@ -40,7 +40,9 @@ export async function getWorkspace(): Promise<WorkspaceRoot> {
   if (!seeding) {
     seeding = (async () => {
       const again = await adapter.readRoot();
-      if (again) return again;
+      // Normalise the double-check read too: a root written by an older build
+      // arrives raw, and returning it unwrapped skipped every field default.
+      if (again) return normaliseRoot(again);
       const { root, scopes } = buildInitialWorkspace();
       for (const [scope, data] of scopes) {
         await adapter.writeScope(scope, data);
@@ -54,13 +56,23 @@ export async function getWorkspace(): Promise<WorkspaceRoot> {
   return seeding;
 }
 
+/**
+ * Read-modify-write of the workspace root, serialised end to end by the adapter.
+ *
+ * The read happens *inside* the write queue, so two callers arriving together —
+ * a heartbeat recording its beat and a revokeGrant removing a grant — cannot
+ * both read the same root and have the later write silently discard the
+ * earlier one. That race once resurrected a revoked `PermissionGrant`, which is
+ * a security regression, not a lost keystroke.
+ */
 export async function saveWorkspace(
   update: (current: WorkspaceRoot) => WorkspaceRoot,
 ): Promise<WorkspaceRoot> {
-  const current = await getWorkspace();
-  const next = { ...update(current), updatedAt: new Date().toISOString() };
-  await adapter.writeRoot(next);
-  return next;
+  await getWorkspace(); // ensure first-run seeding has happened
+  return adapter.mutateRoot((current) => {
+    const base = current ?? normaliseRoot({} as WorkspaceRoot);
+    return { ...update(base), updatedAt: new Date().toISOString() };
+  });
 }
 
 /* ------------------------------------------------------- scoped access ---- */
@@ -79,17 +91,19 @@ export async function readCollection<K extends CollectionName>(
 }
 
 /**
- * Read-modify-write for one scope. The adapter serialises writes per scope file,
- * so concurrent Server Actions queue rather than clobber each other.
+ * Read-modify-write for one scope, serialised end to end by the adapter.
+ *
+ * The read runs inside the scope file's write queue, so two Server Actions
+ * mutating the same scope at once each see the other's result rather than both
+ * reading one snapshot and the second overwriting the first — the difference
+ * between "two records appended" and "one record silently lost".
  */
 export async function mutateScope(
   scope: Scope,
   update: (data: ScopeData) => ScopeData,
 ): Promise<ScopeData> {
-  const current = await readScope(scope);
-  const next = update(current);
-  await adapter.writeScope(scope, next);
-  return next;
+  await getWorkspace();
+  return adapter.mutateScope(scope, update);
 }
 
 export async function insertRecords<K extends CollectionName>(

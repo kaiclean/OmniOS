@@ -86,8 +86,12 @@ export function ApprovalRow({
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              await rejectToolCall(call.scope as Scope, call.id);
-              setOutcome('Rejected. Nothing ran.');
+              const rejected = await rejectToolCall(call.scope as Scope, call.id);
+              setOutcome(
+                rejected
+                  ? 'Rejected. Nothing ran.'
+                  : 'Already decided elsewhere — reload to see what happened.',
+              );
             })
           }
         >

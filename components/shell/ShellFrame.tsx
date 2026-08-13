@@ -111,12 +111,18 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
       data-copilot={copilotOpen ? 'open' : 'hidden'}
       data-sheet={sheetOpen ? 'open' : 'closed'}
     >
-      {railOpen ? (
+      {railOpen || sheetOpen ? (
+        // One scrim serves both off-canvas surfaces: on a phone the copilot
+        // sheet covers nearly the whole width, and without this it could only
+        // be dismissed by hitting a sliver of canvas.
         <button
           type="button"
           className="scrim"
-          aria-label="Close navigation"
-          onClick={() => setRailOpen(false)}
+          aria-label={railOpen ? 'Close navigation' : 'Close assistant'}
+          onClick={() => {
+            setRailOpen(false);
+            setSheetOpen(false);
+          }}
         />
       ) : null}
 
@@ -166,7 +172,7 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
         </main>
       </div>
 
-      <Copilot {...copilot} />
+      <Copilot {...copilot} onCloseSheet={() => setSheetOpen(false)} />
 
       {paletteOpen ? <CommandPalette commands={commands} onClose={closePalette} /> : null}
     </div>

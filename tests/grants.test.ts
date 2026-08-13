@@ -96,4 +96,21 @@ describe('the gate with grants', () => {
     });
     expect(outcome.awaitingApproval).toBe(true);
   }, 60_000);
+
+  it('a call carrying a vault secret reference queues, whatever tier the tool sits at', async () => {
+    await store.saveWorkspace((current) => ({ ...current, grants: [] }));
+    // write_doc is a `write` tool — normally autonomous. A {{secret:X}} in any
+    // argument forces the gate: plaintext must never leave without a decision.
+    const outcome = await propose.proposeCore(personalScope(), 'write_doc', {
+      title: 'Onboarding',
+      body: 'The key is {{secret:STRIPE_KEY}} — do not lose it.',
+    });
+    expect(outcome.awaitingApproval).toBe(true);
+
+    const calls = await store.readCollection(personalScope(), 'toolCalls');
+    const call = calls.find((candidate) => candidate.id === outcome.toolCallId);
+    expect(call?.status).toBe('awaiting-approval');
+    // The placeholder is what is stored — never the resolved plaintext.
+    expect(JSON.stringify(call?.args)).toContain('{{secret:STRIPE_KEY}}');
+  }, 60_000);
 });

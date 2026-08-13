@@ -480,3 +480,46 @@
     opacity: 1;
   }
 }
+
+/* ------------------------------------------------------- mobile polish ---- */
+/* The close affordance exists only where the copilot is a sheet — on a desktop
+   three-column layout the toggle in the strip already owns dismissal. */
+.copilot-close {
+  display: none;
+}
+@media (max-width: 1360px) {
+  .copilot-close {
+    display: inline-flex;
+  }
+}
+
+/* Installed to a Home Screen with viewport-fit=cover, the app paints under the
+   notch and the home indicator; these insets keep controls out of both. */
+.strip {
+  padding-top: env(safe-area-inset-top);
+}
+.rail-foot {
+  padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom));
+}
+.copilot-compose {
+  padding-bottom: calc(var(--s-4) + env(safe-area-inset-bottom));
+}
+@media (max-width: 900px) {
+  .canvas-inner {
+    padding-bottom: calc(var(--s-12) + env(safe-area-inset-bottom));
+  }
+  /* Apple's 44px minimum, applied only where fingers operate — desktop keeps
+     its density. 16px inputs stop iOS Safari zooming the page on focus. */
+  .btn,
+  .nav-item,
+  .rail-toggle,
+  .copilot-close,
+  .select {
+    min-height: 44px;
+  }
+  .input,
+  .textarea,
+  .select {
+    font-size: 16px;
+  }
+}

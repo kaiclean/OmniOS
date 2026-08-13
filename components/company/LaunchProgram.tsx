@@ -100,7 +100,7 @@ export function LaunchProgram({
             ? 'Working through the programme…'
             : report
               ? `${counts('done')} done · ${counts('awaiting-approval')} waiting on you · ${counts('needs-connection') + counts('needs-arguments')} blocked`
-              : 'The strategy half runs now. Anything that reaches outside stops for your approval.'}
+              : 'The strategy half runs now. Anything that reaches outside stops for your approval — or, when nothing is connected that can do it, is listed as blocked with the missing piece named.'}
         </span>
         <button
           className="btn btn--primary"

@@ -154,6 +154,17 @@ describe('risk assignment for remote tools', () => {
     expect(riskForMcpTool('publish_post', 'ask-writes')).toBe('external');
   });
 
+  it('matches read hints as whole words, so a mutating name that merely starts read-ish still gates', () => {
+    // 'checkout_cart' starts with 'check' but buys something; 'get_or_create'
+    // and 'fetch_and_store' read AND mutate. None may run unattended.
+    for (const name of ['checkout_cart', 'get_or_create_customer', 'fetch_and_store', 'listing_create']) {
+      expect(riskForMcpTool(name, 'ask-writes'), name).toBe('external');
+    }
+    // camelCase is tokenised too.
+    expect(riskForMcpTool('getInvoice', 'ask-writes')).toBe('read');
+    expect(riskForMcpTool('createInvoice', 'ask-writes')).toBe('external');
+  });
+
   it('never returns destructive — a remote tool is external or nothing', () => {
     for (const autonomy of ['ask-always', 'ask-writes', 'trusted'] as const) {
       for (const name of ['delete_everything', 'drop_table', 'list_x', 'post_y']) {

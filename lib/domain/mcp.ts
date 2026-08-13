@@ -102,11 +102,14 @@ export interface McpConnectionState {
 /**
  * The risk tier a remote tool gets.
  *
- * Read-only names are recognised generously but the fallback is always
- * `external` — an unrecognised tool from a third-party server is assumed to be
- * able to do something consequential, because it can.
+ * Read-only names are recognised — but only as *whole words*, and only when no
+ * mutating word is also present. Substring matching once read `checkout_cart`
+ * as read-only because it starts with `check`, and on an `ask-writes` server
+ * that ran a purchase with no recorded decision. The fallback is always
+ * `external`: an unrecognised tool from a third-party server is assumed able to
+ * do something consequential, because it can.
  */
-const READ_ONLY_HINTS = [
+const READ_ONLY_HINTS = new Set([
   'list',
   'get',
   'read',
@@ -119,15 +122,64 @@ const READ_ONLY_HINTS = [
   'check',
   'view',
   'inspect',
-];
+]);
+
+/**
+ * Words that mean a call changes something. If any appears, the tool is never
+ * treated as read-only however read-ish the rest of the name looks — `get_or_
+ * create_customer` and `fetch_and_store` both mutate.
+ */
+const MUTATING_HINTS = new Set([
+  'create',
+  'update',
+  'delete',
+  'remove',
+  'write',
+  'set',
+  'add',
+  'post',
+  'put',
+  'patch',
+  'send',
+  'publish',
+  'checkout',
+  'buy',
+  'pay',
+  'purchase',
+  'order',
+  'charge',
+  'store',
+  'save',
+  'upload',
+  'execute',
+  'run',
+  'trigger',
+  'cancel',
+  'approve',
+  'move',
+  'copy',
+  'share',
+  'invite',
+  'merge',
+  'deploy',
+  'install',
+]);
+
+/** Split a tool name into lowercase word tokens: snake, kebab and camelCase. */
+export function toolNameTokens(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[^a-zA-Z0-9]+/)
+    .map((token) => token.toLowerCase())
+    .filter(Boolean);
+}
 
 export function riskForMcpTool(name: string, autonomy: McpAutonomy): RiskTier {
   if (autonomy === 'trusted') return 'write';
 
-  const lower = name.toLowerCase();
-  const looksReadOnly = READ_ONLY_HINTS.some(
-    (hint) => lower.startsWith(hint) || lower.includes(`_${hint}`) || lower.includes(`-${hint}`),
-  );
+  const tokens = toolNameTokens(name);
+  const mutates = tokens.some((token) => MUTATING_HINTS.has(token));
+  const looksReadOnly = !mutates && tokens.some((token) => READ_ONLY_HINTS.has(token));
 
   if (autonomy === 'ask-writes' && looksReadOnly) return 'read';
   return 'external';

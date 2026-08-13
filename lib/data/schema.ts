@@ -263,6 +263,12 @@ export interface WorkspaceRoot {
   readonly grants: PermissionGrant[];
   /** The remote decision channel. Absent on every workspace that predates it. */
   readonly telegram: TelegramConfig;
+  /**
+   * Last authorised /api/health hit — how the 12-hour heartbeat proves the
+   * tunnel and the server are alive. Null until the first beat, and rendered
+   * as an em dash then, never a fake date.
+   */
+  readonly lastHeartbeatAt: Timestamp | null;
 }
 
 export const DEFAULT_SETTINGS: OsSettings = {
@@ -309,5 +315,6 @@ export function normaliseRoot(raw: WorkspaceRoot): WorkspaceRoot {
     // Spread over the default so a config written before a field existed gains it
     // rather than arriving half-formed — the root is raw JSON, not a validated type.
     telegram: { ...DEFAULT_TELEGRAM_CONFIG, ...(raw.telegram ?? {}) },
+    lastHeartbeatAt: raw.lastHeartbeatAt ?? null,
   };
 }

@@ -232,6 +232,13 @@ export interface FinanceEntry extends ScopedRecord {
   readonly confidence: FinanceConfidence;
   readonly recurring: boolean;
   readonly counterparty?: string;
+  /**
+   * True for ledger rows a generator invented. Money is where invariant 5 bites
+   * hardest — a demo revenue figure indistinguishable from a real one turns the
+   * overview strip into fiction — so the flag lives on the entry itself and
+   * every rollup that sums entries reports whether fiction is included.
+   */
+  readonly simulated?: boolean;
 }
 
 /* ------------------------------------------------------- risks & signals --- */

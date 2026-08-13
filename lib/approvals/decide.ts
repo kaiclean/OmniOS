@@ -24,7 +24,7 @@ import 'server-only';
  */
 
 import type { Scope, ToolCall, ToolOutcome } from '@/lib/domain';
-import { readCollection, updateRecord } from '@/lib/data/store';
+import { mutateScope, readCollection, updateRecord } from '@/lib/data/store';
 import { runTool } from '@/lib/ai/tools/executors';
 import { resolveSecrets } from '@/lib/secrets/vault';
 
@@ -36,24 +36,53 @@ export async function findToolCall(scope: Scope, toolCallId: string): Promise<To
   return calls.find((call) => call.id === toolCallId);
 }
 
+/**
+ * Atomically claim a pending call — the check and the write happen inside one
+ * serialised scope mutation, so of two concurrent decisions on the same call
+ * exactly one wins. Without this, both read `awaiting-approval`, both flipped
+ * it, and both ran the tool: a double-click approved-and-ran an external call
+ * twice, and a reject on an already-approved call reported "Nothing ran" over
+ * a call that had. Returns the claimed call, or null if it was already decided.
+ */
+async function claimPendingCall(
+  scope: Scope,
+  toolCallId: string,
+  patch: Partial<ToolCall>,
+): Promise<ToolCall | null> {
+  let claimed: ToolCall | null = null;
+  await mutateScope(scope, (data) => {
+    const call = data.toolCalls.find((entry) => entry.id === toolCallId);
+    if (!call || call.status !== 'awaiting-approval') return data;
+    claimed = call;
+    return {
+      ...data,
+      toolCalls: data.toolCalls.map((entry) =>
+        entry.id === toolCallId ? { ...entry, ...patch, updatedAt: new Date().toISOString() } : entry,
+      ),
+    };
+  });
+  return claimed;
+}
+
 export async function approveToolCallAs(
   scope: Scope,
   toolCallId: string,
   decidedBy: string,
 ): Promise<ToolOutcome> {
-  const call = await findToolCall(scope, toolCallId);
-  if (!call) return { ok: false, summary: 'That call is not in this space.', error: 'not-found' };
-  if (call.status !== 'awaiting-approval') {
-    return { ok: false, summary: `That call was already ${call.status}.`, error: 'not-pending' };
-  }
+  const existing = await findToolCall(scope, toolCallId);
+  if (!existing) return { ok: false, summary: 'That call is not in this space.', error: 'not-found' };
 
   const now = new Date();
   const decidedAt = now.toISOString();
-  await updateRecord(scope, 'toolCalls', toolCallId, { status: 'approved', decidedAt, decidedBy });
+  const call = await claimPendingCall(scope, toolCallId, { status: 'approved', decidedAt, decidedBy });
+  if (!call) {
+    const latest = await findToolCall(scope, toolCallId);
+    return { ok: false, summary: `That call was already ${latest?.status ?? 'decided'}.`, error: 'not-pending' };
+  }
 
   const outcome = await runTool(
     call.toolId,
-    { scope, now, actor: decidedBy, resolveSecrets },
+    { scope, now, actor: decidedBy, resolveSecrets, callId: toolCallId },
     call.args,
     { approval: { decidedBy, decidedAt } },
   );
@@ -73,10 +102,10 @@ export async function rejectToolCallAs(
   toolCallId: string,
   decidedBy: string,
 ): Promise<boolean> {
-  const call = await findToolCall(scope, toolCallId);
-  if (!call || call.status !== 'awaiting-approval') return false;
-
-  await updateRecord(scope, 'toolCalls', toolCallId, {
+  // Same atomic claim as approve: a reject only succeeds if it is the one that
+  // moved the call out of `awaiting-approval`. Racing an approval, at most one
+  // wins, so the UI never says "Nothing ran" over a call that already ran.
+  const call = await claimPendingCall(scope, toolCallId, {
     status: 'rejected',
     decidedAt: new Date().toISOString(),
     decidedBy,
@@ -85,5 +114,5 @@ export async function rejectToolCallAs(
     // pass that wants to stop suggesting rejected things would read it here.
     result: 'Rejected. Nothing ran.',
   });
-  return true;
+  return call !== null;
 }

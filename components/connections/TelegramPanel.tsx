@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useTransition } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 
 import type { RiskTier, TelegramConfig } from '@/lib/domain';
 import { RISK_EXPLANATION } from '@/lib/domain';
@@ -31,6 +31,10 @@ export function TelegramPanel({
 }) {
   const [state, action, pending] = useActionState(saveTelegramConfig, INITIAL);
   const [testing, startTest] = useTransition();
+  // The test action's result was voided, so a successful "Sent" produced no
+  // feedback and a failure showed nothing either — the founder could not tell
+  // whether the link worked. Hold it and render it in the feedback slots.
+  const [testResult, setTestResult] = useState<TelegramFormState | null>(null);
 
   const ready = tokenStored && webhookSecretSet;
 
@@ -114,6 +118,12 @@ export function TelegramPanel({
           {state.message}
         </span>
       ) : null}
+      {testResult?.error ? <p className="note note--warn">Test failed: {testResult.error}</p> : null}
+      {testResult?.ok ? (
+        <span className="hint" role="status">
+          {testResult.message ?? 'Sent. Check your phone.'}
+        </span>
+      ) : null}
 
       <div className="row" style={{ gap: 'var(--s-2)' }}>
         <button className="btn btn--primary btn--sm" type="submit" disabled={pending}>
@@ -123,7 +133,7 @@ export function TelegramPanel({
           className="btn btn--ghost btn--sm"
           type="button"
           disabled={testing || !config.chatId}
-          onClick={() => startTest(async () => void (await sendTelegramTest()))}
+          onClick={() => startTest(async () => setTestResult(await sendTelegramTest()))}
         >
           {testing ? 'Sending…' : 'Send a test message'}
         </button>

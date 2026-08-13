@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import type { Scope, ToolCall, ToolOutcome } from '@/lib/domain';
-import { companyScope, makeRecordId, personalScope, requiresApproval, scopeKey, validateArgs } from '@/lib/domain';
+import { companyScope, isDecidedCall, makeRecordId, personalScope, requiresApproval, scopeKey, validateArgs } from '@/lib/domain';
 import { getWorkspace, insertRecords, readCollection, updateRecord } from '@/lib/data/store';
 import { resolveTool } from '@/lib/ai/tools/executors';
 import { LOCAL_DECIDER, approveToolCallAs, rejectToolCallAs } from '@/lib/approvals/decide';
@@ -81,9 +81,13 @@ export async function approveToolCall(scope: Scope, toolCallId: string): Promise
   return outcome;
 }
 
-export async function rejectToolCall(scope: Scope, toolCallId: string): Promise<void> {
-  await rejectToolCallAs(scope, toolCallId, LOCAL_DECIDER);
+export async function rejectToolCall(scope: Scope, toolCallId: string): Promise<boolean> {
+  // The boolean is the truth the UI needs: false means the call was no longer
+  // pending — already approved-and-run, or rejected in another tab — so the row
+  // must not claim "Rejected. Nothing ran." over a call that in fact ran.
+  const rejected = await rejectToolCallAs(scope, toolCallId, LOCAL_DECIDER);
   revalidatePath('/', 'layout');
+  return rejected;
 }
 
 export interface PendingCall {
@@ -128,7 +132,14 @@ export async function pendingApprovals(): Promise<PendingCall[]> {
   return pending.sort((a, b) => (a.call.at < b.call.at ? 1 : -1));
 }
 
-/** Recently decided calls, so the inbox can show what it just did. */
+/**
+ * Recently *decided* calls — ones a recorded decision exists for: approved,
+ * rejected, or covered by a standing grant. Low-risk calls that ran because no
+ * approval was required never had a decision, and counting them as "approved
+ * and run" told the founder twelve things were approved on a workspace where
+ * nothing ever was. Auto-run activity belongs to Mission Control and the
+ * timeline, not the approvals record.
+ */
 export async function recentDecisions(limit = 12): Promise<PendingCall[]> {
   const workspace = await getWorkspace();
 
@@ -143,7 +154,7 @@ export async function recentDecisions(limit = 12): Promise<PendingCall[]> {
   for (const space of spaces) {
     const calls = await readCollection(space.scope, 'toolCalls');
     for (const call of calls) {
-      if (call.status === 'awaiting-approval') continue;
+      if (!isDecidedCall(call)) continue;
       const tool = await resolveTool(call.toolId);
       decided.push({ call, spaceLabel: space.label, ...(tool ? { toolLabel: tool.label } : {}) });
     }

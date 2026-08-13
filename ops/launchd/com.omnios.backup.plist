@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.omnios.backup</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>__OMNIOS_REPO__/ops/backup.sh</string>
+  </array>
+  <!-- Daily at 03:30 local, plus once at load so a backup exists from day one.
+       launchd runs missed StartCalendarInterval jobs on wake, so a sleeping
+       Mac still gets its daily snapshot. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>3</integer>
+    <key>Minute</key><integer>30</integer>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>__OMNIOS_HOME__/Library/Logs/omnios/backup.log</string>
+  <key>StandardErrorPath</key><string>__OMNIOS_HOME__/Library/Logs/omnios/backup.log</string>
+</dict>
+</plist>

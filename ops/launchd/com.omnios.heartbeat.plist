@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.omnios.heartbeat</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>__OMNIOS_REPO__/ops/heartbeat.sh</string>
+  </array>
+  <!-- Every 12 hours, plus once at load so a reboot proves itself promptly. -->
+  <key>StartInterval</key><integer>43200</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>__OMNIOS_HOME__/Library/Logs/omnios/heartbeat.log</string>
+  <key>StandardErrorPath</key><string>__OMNIOS_HOME__/Library/Logs/omnios/heartbeat.log</string>
+</dict>
+</plist>

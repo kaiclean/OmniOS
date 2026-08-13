@@ -27,6 +27,13 @@ export interface ActDecision {
   readonly calls: readonly PlannedCall[];
   /** Set when the founder clearly wanted an action the local path cannot parse. */
   readonly note?: string;
+  /**
+   * 'command' when the founder asked for something to be *done* and a specific
+   * tool was identified — whether or not it could run. The reply for a command
+   * is a receipt of what happened, not a capability briefing; without this flag
+   * the assistant answered "/task …" with a marketing report.
+   */
+  readonly intent?: 'command';
 }
 
 /**
@@ -121,7 +128,7 @@ function shortlistBand(
 
 /** Verbs that signal the founder wants something done, not described. */
 const IMPERATIVE_HINTS =
-  /^(create|add|make|start|track|record|log|schedule|write|set up|set|remember|remind|delete|remove|send|publish|post|arm|pause|complete|finish|mark)\b/i;
+  /^(create|add|make|start|track|record|log|schedule|write|set up|set|remember|remind|delete|remove|reset|wipe|clear|archive|send|publish|post|arm|pause|complete|finish|mark)\b/i;
 
 const QUOTED = /["“”']([^"“”']{2,120})["“”']/;
 const CALLED = /\b(?:called|named|titled)\s+(.{2,80}?)(?:\s+(?:due|by|for|with|at|priority)\b|[.!?]|$)/i;
@@ -165,9 +172,17 @@ export function detectActLocally(prompt: string, scope: Scope | null, now: Date,
     else if (/\btomorrow\b/i.test(trimmed)) args[dateParam.name] = tomorrow(now);
   }
 
+  // Enum words are matched outside the quoted title — "delete that 'goal
+  // notes'" names a record, not the goals collection.
+  const outsideQuotes = trimmed.replace(QUOTED, ' ');
   for (const param of top.tool.params) {
     if (param.type !== 'enum' || !param.enumValues || args[param.name] !== undefined) continue;
-    const hit = param.enumValues.find((value) => new RegExp(`\\b${value}\\b`, 'i').test(trimmed));
+    // "the task" must find the 'tasks' collection: enum words are matched in
+    // singular and plural, because founders speak about one thing at a time.
+    const hit = param.enumValues.find((value) => {
+      const stem = value.endsWith('s') ? value.slice(0, -1) : value;
+      return new RegExp(`\\b${stem}s?\\b`, 'i').test(outsideQuotes);
+    });
     if (hit) args[param.name] = hit;
   }
 
@@ -175,14 +190,21 @@ export function detectActLocally(prompt: string, scope: Scope | null, now: Date,
     (p) => p.required && p.default === undefined && args[p.name] === undefined,
   );
   if (missing.length > 0) {
+    // Missing pieces are named in the founder's language — a param name like
+    // "collection" is ours, not theirs — and the example must itself parse.
+    const wanted = missing
+      .map((p) => (p.description ? (p.description.split(',')[0] ?? p.name).replace(/\.$/, '').toLowerCase() : p.name))
+      .join('; ');
+    const example = top.tool.matches.find((m) => m.split(' ').some((w) => new RegExp(`\\b${w}\\b`, 'i').test(trimmed))) ?? top.tool.matches[0] ?? top.tool.label;
     return {
       mode: 'answer',
       calls: [],
-      note: `I can ${top.tool.label.toLowerCase()}, but I need ${missing.map((p) => p.name).join(' and ')} — say it like: ${top.tool.matches[0] ?? top.tool.label} “…”.`,
+      intent: 'command',
+      note: `I can ${top.tool.label.toLowerCase()}, but I am missing: ${wanted}. Say it like: ${example} “…”.`,
     };
   }
 
-  return { mode: 'act', calls: [{ toolId: top.tool.id, args }] };
+  return { mode: 'act', intent: 'command', calls: [{ toolId: top.tool.id, args }] };
 }
 
 const ACT_SYSTEM = `You translate a founder's instruction into tool calls inside their operating system, or decide none is wanted.
@@ -291,7 +313,15 @@ export async function detectAct(
       )
       .slice(0, 3);
 
-    return calls.length > 0 ? { mode: 'act', calls } : { mode: 'answer', calls: [] };
+    // Reads serve questions; anything else means the founder asked for a change,
+    // and the reply should be a receipt of it rather than a briefing.
+    const command = calls.some((call) => {
+      const tool = shortlist.find((t) => t.id === call.toolId);
+      return tool !== undefined && tool.risk !== 'read';
+    });
+    return calls.length > 0
+      ? { mode: 'act', calls, ...(command ? { intent: 'command' as const } : {}) }
+      : { mode: 'answer', calls: [] };
   } catch {
     // A provider failure must never lose the turn — the local path still stands.
     return detectActLocally(prompt, scope, now, preferCapabilityId);

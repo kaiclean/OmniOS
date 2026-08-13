@@ -168,9 +168,10 @@ function makeBrand(ctx: GenCtx): Company['brand'] {
 
 /* ---------------------------------------------------------------- goals --- */
 
-function makeGoals(ctx: GenCtx): Goal[] {
-  const { rng, draft, now } = ctx;
-  const explicit: Goal[] = draft.goals.filter(Boolean).map((title, i) => ({
+/** The goals the founder actually typed — real records in every mode, including a clean slate. */
+function founderGoals(ctx: GenCtx): Goal[] {
+  const { draft, now } = ctx;
+  return draft.goals.filter(Boolean).map((title, i) => ({
     ...base(ctx, 'goal', `founder:${i}:${title}`),
     title,
     description: 'Set during company creation.',
@@ -181,6 +182,11 @@ function makeGoals(ctx: GenCtx): Goal[] {
     capabilityId: 'strategy',
     why: 'Named by the founder as a reason this company exists right now.',
   }));
+}
+
+function makeGoals(ctx: GenCtx): Goal[] {
+  const { rng, now } = ctx;
+  const explicit = founderGoals(ctx);
 
   const generated: Array<[string, string, Goal['horizon'], string]> = [
     [
@@ -591,6 +597,7 @@ function makeFinance(ctx: GenCtx): FinanceEntry[] {
         label: `Invoice ${String(1000 + monthsAgo * 10 + k)}`,
         confidence,
         recurring: rng.bool(0.25),
+        simulated: true,
       });
     }
     for (const category of rng.sample(EXPENSE_CATEGORIES, rng.int(4, 6))) {
@@ -603,6 +610,7 @@ function makeFinance(ctx: GenCtx): FinanceEntry[] {
         label: category,
         confidence,
         recurring: ['Salaries', 'Insurance', 'Tools & software'].includes(category),
+        simulated: true,
       });
     }
   }
@@ -821,7 +829,17 @@ export interface GeneratedCompany {
  * what makes this testable and what stops a reload from silently reshuffling a
  * founder's world.
  */
-export function generateCompanyWorkspace(draft: CompanyDraft, now: Date = new Date()): GeneratedCompany {
+export interface GenerateOptions {
+  /**
+   * A real company starts from the truth: structure, DNA scaffold and the
+   * founder's own goals — and not one invented record. The populated mode
+   * exists to make the product legible in one glance; the clean slate exists
+   * so a founder can run their actual business without fiction in the ledger.
+   */
+  readonly cleanSlate?: boolean;
+}
+
+export function generateCompanyWorkspace(draft: CompanyDraft, now: Date = new Date(), options: GenerateOptions = {}): GeneratedCompany {
   const companyId = makeId(draft.name, `${draft.name}:${draft.industry}`);
   const ctx: GenCtx = { rng: createRng(companyId), companyId, now, draft };
 
@@ -854,8 +872,14 @@ export function generateCompanyWorkspace(draft: CompanyDraft, now: Date = new Da
       },
     ],
     disabledCapabilityIds: [],
-    generated: true,
+    // The badge this flag drives reads "Sample workspace". A clean slate holds
+    // the founder's real company — generated scaffolding, but no sample data.
+    generated: !options.cleanSlate,
   };
+
+  if (options.cleanSlate) {
+    return { company, data: { ...emptyScopeData(), goals: founderGoals(ctx) } };
+  }
 
   const { briefs, assets } = makeCreative(ctx);
 

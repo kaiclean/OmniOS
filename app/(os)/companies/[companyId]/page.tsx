@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { capabilitiesFor, capabilityLabel } from '@/lib/capabilities/registry';
 import { ownedBy, panel } from '@/lib/capabilities/panels';
 import { loadCompanySpace } from '@/lib/data/space';
-import { formatDurationMinutes, formatMinorAmount, pluralise } from '@/lib/format';
+import { EMPTY, formatDurationMinutes, formatMinorAmount, pluralise } from '@/lib/format';
 import { Badge, PageHead, Panel, SectionHead } from '@/components/ui/primitives';
 import { CapabilityPanels } from '@/components/panels/CapabilityPanels';
 import { LaunchProgram } from '@/components/company/LaunchProgram';
@@ -68,8 +68,14 @@ export default async function CompanyOverviewPage({
       <section className="panel" style={{ marginBottom: 'var(--s-8)' }}>
         <div className="panel-body">
           <div className="exec-row">
-            <ExecStat label="Net position" value={formatMinorAmount(revenue - costs, company.baseCurrency, { compact: true })} />
-            <ExecStat label="Revenue booked" value={formatMinorAmount(revenue, company.baseCurrency, { compact: true })} />
+            <ExecStat
+              label="Net position"
+              value={actuals.length === 0 ? EMPTY : formatMinorAmount(revenue - costs, company.baseCurrency, { compact: true })}
+            />
+            <ExecStat
+              label="Revenue booked"
+              value={actuals.length === 0 ? EMPTY : formatMinorAmount(revenue, company.baseCurrency, { compact: true })}
+            />
             <ExecStat label="Open work" value={pluralise(openTasks, 'item')} />
             <ExecStat label="Blocked" value={String(blocked)} tone={blocked > 0 ? 'warn' : undefined} />
             <ExecStat label="Automated this month" value={formatDurationMinutes(savedMinutes)} />
