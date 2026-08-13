@@ -97,6 +97,7 @@ import {
   updateRecord,
 } from '@/lib/data/store';
 import { SEARCHABLE_COLLECTIONS } from './registry';
+import { formatMinorAmount } from '@/lib/format';
 import { generateCompanyWorkspace } from '@/lib/generation/company-hq';
 import { getPreset } from '@/lib/ai/agent-presets';
 import { newMeeting, recommendParticipants } from '@/lib/ai/meeting';
@@ -451,8 +452,10 @@ const addFinanceEntry: ToolExecutor = async (ctx, args) => {
     counterparty: optText(args, 'counterparty'),
   };
   await insertRecords(ctx.scope, 'finance', [entry]);
+  // The receipt is read by a human: "CHF 49.00 out", never "CHF 4900 minor
+  // units" — the wire unit is the store's business, not the founder's.
   return ok(
-    `Recorded ${entry.amount.currency} ${entry.amount.amount} minor units ${entry.direction} on ${entry.date} as “${label}”.`,
+    `Recorded ${formatMinorAmount(entry.amount.amount, entry.amount.currency)} ${entry.direction} on ${entry.date} as “${label}”.`,
     [entry.id],
   );
 };
