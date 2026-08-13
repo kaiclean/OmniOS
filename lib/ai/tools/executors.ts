@@ -452,10 +452,10 @@ const addFinanceEntry: ToolExecutor = async (ctx, args) => {
     counterparty: optText(args, 'counterparty'),
   };
   await insertRecords(ctx.scope, 'finance', [entry]);
-  // The receipt is read by a human: "CHF 49.00 out", never "CHF 4900 minor
-  // units" — the wire unit is the store's business, not the founder's.
+  // The receipt is read by a human: "CHF 49.90 out", never "CHF 4990 minor
+  // units" — and never rounded, because a receipt that rounds is a wrong receipt.
   return ok(
-    `Recorded ${formatMinorAmount(entry.amount.amount, entry.amount.currency)} ${entry.direction} on ${entry.date} as “${label}”.`,
+    `Recorded ${formatMinorAmount(entry.amount.amount, entry.amount.currency, { exact: true })} ${entry.direction} on ${entry.date} as “${label}”.`,
     [entry.id],
   );
 };

@@ -58,17 +58,20 @@ export function formatNumber(value: number | null | undefined, decimals = 0): st
 
 export function formatMoney(
   money: Money | null | undefined,
-  options: { compact?: boolean; showCurrency?: boolean } = {},
+  options: { compact?: boolean; showCurrency?: boolean; exact?: boolean } = {},
 ): string {
   if (!money) return EMPTY;
   const units = CURRENCY_MINOR_UNITS[money.currency] ?? 100;
   const major = money.amount / units;
-  const { compact = false, showCurrency = true } = options;
+  const { compact = false, showCurrency = true, exact = false } = options;
   const body = stable(
-    formatter(`m:${compact}`, () =>
+    formatter(`m:${compact}:${exact}`, () =>
       new Intl.NumberFormat('en-CH', {
         notation: compact ? 'compact' : 'standard',
-        maximumFractionDigits: compact ? 1 : 0,
+        // Dashboard tiles round to whole units on purpose; a receipt or ledger
+        // line must never round — CHF 49.90 confirmed as "CHF 50" is a lie.
+        maximumFractionDigits: compact ? 1 : exact ? 2 : 0,
+        ...(exact && !compact ? { minimumFractionDigits: 2 } : {}),
       }),
     ).format(major),
   );
@@ -78,7 +81,7 @@ export function formatMoney(
 export function formatMinorAmount(
   amount: number | null | undefined,
   currency: CurrencyCode,
-  options: { compact?: boolean; showCurrency?: boolean } = {},
+  options: { compact?: boolean; showCurrency?: boolean; exact?: boolean } = {},
 ): string {
   if (amount === null || amount === undefined) return EMPTY;
   return formatMoney({ amount, currency }, options);

@@ -169,15 +169,22 @@ function parseMention(
  * Slash commands are the deterministic fast path: no model, no routing
  * ambiguity — "/task Buy the domain" is exactly one proposal, validated and
  * gated like anything else. The registry lives in `./commands` so the composer
- * lists exactly what the server parses.
+ * lists exactly what the server parses; each entry owns its parse, so a
+ * command can carry more than one argument (a doc's body, an amount and a
+ * label) without any of it becoming model territory.
  */
-function parseSlashCommand(prompt: string): { toolId: string; args: Record<string, string>; label: string } | null {
+function parseSlashCommand(
+  prompt: string,
+): { toolId: string; args: Record<string, string | number>; label: string; parseError?: string } | null {
   const match = /^\/([a-z]+)\s+(.+)$/s.exec(prompt.trim());
   if (!match?.[1] || !match[2]) return null;
   const entry = SLASH_COMMANDS.find((candidate) => candidate.command === match[1]);
-  return entry
-    ? { toolId: entry.toolId, args: { [entry.argName]: match[2].trim() }, label: entry.command }
-    : null;
+  if (!entry) return null;
+  const parsed = entry.parse(match[2]);
+  if (!parsed.ok || !parsed.args) {
+    return { toolId: entry.toolId, args: {}, label: entry.command, parseError: parsed.error ?? 'That did not parse.' };
+  }
+  return { toolId: entry.toolId, args: { ...parsed.args }, label: entry.command };
 }
 
 export async function ask(
@@ -236,9 +243,19 @@ export async function ask(
   const actLines: string[] = [];
   let loopResult: LoopResult | undefined;
   if (actScope && actScope.kind !== 'shared') {
-    if (slash) {
+    if (slash?.parseError) {
+      // The command was recognised but its input was not usable — the reply is
+      // the registry's own guidance, not a briefing.
+      actLines.push(slash.parseError);
+    } else if (slash) {
+      // A ledger command books "today": the date comes from this turn's clock,
+      // server-side, because the client-safe parser must stay deterministic.
+      const args =
+        slash.toolId === 'add_finance_entry' && slash.args['date'] === undefined
+          ? { ...slash.args, date: now.toISOString().slice(0, 10) }
+          : slash.args;
       // The deterministic path: one named tool, one proposal, the same gate.
-      const outcome = await proposeCore(actScope, slash.toolId, slash.args, { now });
+      const outcome = await proposeCore(actScope, slash.toolId, args, { now });
       actLines.push(
         outcome.awaitingApproval
           ? `Queued for your approval: ${outcome.preview} Decide it under Approvals.`
@@ -330,6 +347,17 @@ export async function ask(
   if (!provider.simulated && !commandTurn) {
     try {
       const workspace = await getWorkspace();
+      // The chat remembers itself: the last few turns of this same conversation
+      // ride along, so "make it shorter" or "and the second one?" means what the
+      // founder thinks it means. Only this channel's turns — a thread never
+      // leaks into the main conversation, capped and trimmed so history can
+      // never crowd out the analysis.
+      const history = (await conversation(target, options.channel))
+        .slice(-6)
+        .map((entry) => ({
+          role: entry.role === 'founder' ? ('user' as const) : ('assistant' as const),
+          content: entry.text.length > 1200 ? `${entry.text.slice(0, 1200)}…` : entry.text,
+        }));
       const response = await provider.complete({
         messages: [
           {
@@ -362,6 +390,7 @@ export async function ask(
               }),
             ),
           },
+          ...history,
           {
             role: 'user',
             content: `The founder asked: "${spoken}"\n\nAnalysis computed from their records:\n\n${composition.body}${loopFindings}\n\nWrite the reply.`,

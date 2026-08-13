@@ -123,3 +123,85 @@ describe('a hired agent’s loop is structurally narrowed', () => {
     expect(finance.some((entry) => entry.label === 'Sneaky invoice')).toBe(false);
   }, 60_000);
 });
+
+describe('the composer can carry a document, a risk, and money', () => {
+  const AT_TEN = new Date('2026-08-08T10:00:00.000Z');
+
+  it('/doc writes a real document: first line titles it, the rest is the body', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/doc Intake-to-invoice outline v1\n1. Intake form\n2. Quote draft\n3. Invoice + chase',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('Done:');
+
+    const docs = await store.readCollection(personalScope(), 'docs');
+    const doc = docs.find((entry) => entry.title === 'Intake-to-invoice outline v1');
+    expect(doc).toBeDefined();
+    expect(doc!.body).toContain('2. Quote draft');
+  }, 60_000);
+
+  it('/doc without a body replies with the registry’s own guidance and writes nothing', async () => {
+    const before = (await store.readCollection(personalScope(), 'docs')).length;
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/doc Only a title',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('first line is the title');
+    expect(result.message.text).not.toContain('Done:');
+    expect((await store.readCollection(personalScope(), 'docs')).length).toBe(before);
+  }, 60_000);
+
+  it('/expense books integer minor units out, dated by the turn clock', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/expense 49.90 Playwright licence',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('Done:');
+    expect(result.message.text).toContain('CHF 49.90');
+
+    const finance = await store.readCollection(personalScope(), 'finance');
+    const entry = finance.find((candidate) => candidate.label === 'Playwright licence');
+    expect(entry).toBeDefined();
+    expect(entry!.amount.amount).toBe(4990);
+    expect(entry!.direction).toBe('out');
+    expect(entry!.date).toBe('2026-08-08');
+    expect(entry!.simulated).toBeUndefined();
+  }, 60_000);
+
+  it('/income books money in, and a garbled amount gets guidance instead of a guess', async () => {
+    const ok = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      "/income 1'500 Helvetia setup fee",
+      AT_TEN,
+    );
+    expect(ok.message.text).toContain('Done:');
+    const finance = await store.readCollection(personalScope(), 'finance');
+    const entry = finance.find((candidate) => candidate.label === 'Helvetia setup fee');
+    expect(entry!.amount.amount).toBe(150000);
+    expect(entry!.direction).toBe('in');
+
+    const bad = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/expense lots of money on things',
+      AT_TEN,
+    );
+    expect(bad.message.text).toContain('Say it like');
+    expect(bad.message.text).not.toContain('Done:');
+  }, 60_000);
+
+  it('/risk records label and consequence from two lines', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      '/risk Single prospect pipeline\nIf Helvetia stalls there is no second conversation, and the quarter goal dies with it.',
+      AT_TEN,
+    );
+    expect(result.message.text).toContain('Done:');
+    const risks = await store.readCollection(personalScope(), 'risks');
+    const risk = risks.find((entry) => entry.label === 'Single prospect pipeline');
+    expect(risk).toBeDefined();
+    expect(risk!.detail).toContain('no second conversation');
+  }, 60_000);
+});
