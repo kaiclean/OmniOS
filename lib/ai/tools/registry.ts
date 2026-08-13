@@ -878,7 +878,7 @@ const TOOL_LIST = [
     risk: 'destructive',
     capabilityId: 'operations',
     scopeKinds: BOTH,
-    matches: ['reset the capability', 'wipe marketing', 'clear everything in', 'start that section over', 'delete all the data for'],
+    matches: ['reset the capability', 'reset', 'capability data', 'wipe marketing', 'clear everything in', 'start that section over', 'delete all the data for'],
     params: [
       { name: 'capabilityId', type: 'enum', description: 'The capability to clear.', required: true, enumValues: capabilityIds() },
     ],

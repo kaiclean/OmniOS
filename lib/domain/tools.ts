@@ -118,6 +118,17 @@ export interface ToolCall extends ScopedRecord {
   readonly grantId?: string;
 }
 
+/**
+ * A recorded decision exists for this call — approved, rejected, or covered by
+ * a standing grant (which stamps the grant's decision onto the call). Low-risk
+ * calls that ran because no approval was required never had a decision, and any
+ * surface that says "approved" must not count them: on a fresh workspace the
+ * approvals page once claimed twelve approvals where the founder had made none.
+ */
+export function isDecidedCall(call: Pick<ToolCall, 'status' | 'decidedAt'>): boolean {
+  return call.status !== 'awaiting-approval' && call.decidedAt !== undefined;
+}
+
 export interface ToolOutcome {
   readonly ok: boolean;
   readonly summary: string;

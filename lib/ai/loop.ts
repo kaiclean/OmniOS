@@ -28,9 +28,51 @@ import 'server-only';
  */
 
 import type { LlmProvider, Scope, ToolDefinition } from '@/lib/domain';
+import { readCollection } from '@/lib/data/store';
+import type { CollectionName } from '@/lib/data/schema';
 import { detectAct, type PlannedCall } from './act';
 import { availableTools, toolsForAgent } from './available';
 import { proposeCore } from './tools/propose';
+
+/**
+ * A founder deletes by name, never by id — "delete the task 'X'" carries a
+ * title, and the executor rightly refuses an id it cannot find. Resolving the
+ * name through the scope is a read, and the id it yields is still exactly the
+ * record the founder pointed at. Ambiguity refuses rather than guesses: with
+ * two matches, deleting either one would be deciding for them.
+ */
+async function resolveDeleteTarget(
+  scope: Scope,
+  collection: string,
+  reference: string,
+): Promise<{ id: string } | { note: string }> {
+  const records = (await readCollection(scope, collection as CollectionName)) as unknown as ReadonlyArray<
+    Record<string, unknown> & { id: string }
+  >;
+  if (records.some((record) => record.id === reference)) return { id: reference };
+
+  const titleOf = (record: Record<string, unknown>): string => {
+    for (const field of ['title', 'label', 'name', 'text'] as const) {
+      const value = record[field];
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    return '';
+  };
+  const wanted = reference.trim().toLowerCase();
+  const exact = records.filter((record) => titleOf(record).trim().toLowerCase() === wanted);
+  const pool = exact.length > 0 ? exact : records.filter((record) => titleOf(record).toLowerCase().includes(wanted));
+
+  if (pool.length === 1 && pool[0]) return { id: pool[0].id };
+  if (pool.length === 0) {
+    return { note: `I could not find “${reference}” in ${collection} here, so nothing was deleted.` };
+  }
+  return {
+    note: `“${reference}” matches ${pool.length} records in ${collection} — say more of the exact title: ${pool
+      .slice(0, 3)
+      .map((record) => `“${titleOf(record)}”`)
+      .join(', ')}. Nothing was deleted.`,
+  };
+}
 
 /**
  * Four is enough for "look it up, then act on what you found", and short enough
@@ -51,6 +93,8 @@ export interface LoopResult {
   /** Set when the loop stopped early, and why — never left for the reader to infer. */
   readonly haltedBecause?: 'awaiting-approval' | 'round-limit' | 'call-limit';
   readonly note?: string;
+  /** 'command' when any round wanted a change made — the reply is then a receipt, not a briefing. */
+  readonly intent?: 'command';
 }
 
 /** What the planner is told about a round that already happened. */
@@ -76,6 +120,7 @@ export async function runActLoop(
   const steps: LoopStep[] = [];
   const observations: string[] = [];
   let note: string | undefined;
+  let intent: 'command' | undefined;
 
   // Resolved once per turn rather than per round: a connection cannot appear
   // mid-turn, and re-probing the workspace between rounds would make the tools
@@ -100,13 +145,26 @@ export async function runActLoop(
     });
 
     if (decision.note && !note) note = decision.note;
+    if (decision.intent === 'command') intent = 'command';
     if (decision.mode !== 'act' || decision.calls.length === 0) {
-      return { steps, ...(note ? { note } : {}) };
+      return { steps, ...(note ? { note } : {}), ...(intent ? { intent } : {}) };
     }
 
-    for (const planned of decision.calls) {
+    for (let planned of decision.calls) {
       if (steps.length >= MAX_CALLS) {
-        return { steps, haltedBecause: 'call-limit', ...(note ? { note } : {}) };
+        return { steps, haltedBecause: 'call-limit', ...(note ? { note } : {}), ...(intent ? { intent } : {}) };
+      }
+
+      if (planned.toolId === 'delete_record') {
+        const collection = String(planned.args['collection'] ?? '');
+        const reference = String(planned.args['recordId'] ?? '');
+        const resolved = await resolveDeleteTarget(options.scope, collection, reference);
+        if ('note' in resolved) {
+          // Halt rather than retry: the same sentence will resolve the same way,
+          // and only the founder can supply the missing precision.
+          return { steps, note: resolved.note, ...(intent ? { intent } : {}) };
+        }
+        planned = { ...planned, args: { ...planned.args, recordId: resolved.id } };
       }
 
       const outcome = await proposeCore(options.scope, planned.toolId, planned.args, {
@@ -126,14 +184,14 @@ export async function runActLoop(
         // Stop. Planning past a gated call would mean planning on the assumption
         // that the founder will approve it, and an assistant that assumes a yes
         // has already decided for them.
-        return { steps, haltedBecause: 'awaiting-approval', ...(note ? { note } : {}) };
+        return { steps, haltedBecause: 'awaiting-approval', ...(note ? { note } : {}), ...(intent ? { intent } : {}) };
       }
 
       observations.push(observation(planned, outcome.summary));
     }
   }
 
-  return { steps, haltedBecause: 'round-limit', ...(note ? { note } : {}) };
+  return { steps, haltedBecause: 'round-limit', ...(note ? { note } : {}), ...(intent ? { intent } : {}) };
 }
 
 /** The reply text for a loop, stating per step what actually happened. */

@@ -112,12 +112,24 @@ describe('the loop cannot outrun the gate', () => {
   }, 30_000);
 
   it('says out loud that it stopped, and why', async () => {
+    const result = await loop.runActLoop('send the update', {
+      scope: personalScope(),
+      provider: scripted([[{ name: 'send_email', args: { to: 'a@example.com', subject: 'Update', body: 'Hello.' } }]]).provider,
+      now: new Date('2026-08-07T12:00:00.000Z'),
+    });
+    expect(loop.describeLoop(result).join(' ')).toContain('I stopped there');
+  }, 30_000);
+
+  it('refuses to queue a delete whose target does not exist, before the gate ever sees it', async () => {
     const result = await loop.runActLoop('delete something', {
       scope: personalScope(),
       provider: scripted([[{ name: 'delete_record', args: { collection: 'tasks', recordId: 'nope' } }]]).provider,
       now: NOW,
     });
-    expect(loop.describeLoop(result).join(' ')).toContain('I stopped there');
+    // Queuing it would invite the founder to approve a deletion that must fail.
+    expect(result.steps).toHaveLength(0);
+    expect(result.haltedBecause).toBeUndefined();
+    expect(result.note).toMatch(/could not find/i);
   }, 30_000);
 });
 
@@ -168,5 +180,63 @@ describe('a turn never writes the same record twice', () => {
 
     const ids = after.slice(0, 2).map((call) => call.id);
     expect(new Set(ids).size, `both steps must have their own id, got ${ids.join(' and ')}`).toBe(2);
+  }, 30_000);
+});
+
+describe('deleting by name, which is the only way a founder ever says it', () => {
+  const local: LlmProvider = {
+    id: 'local-only',
+    label: 'Local',
+    simulated: true,
+    keyName: null,
+    available: async () => true,
+    complete: async () => ({ text: '', providerId: 'local-only', simulated: true }),
+  };
+  const AT_TEN = new Date('2026-08-07T10:00:00.000Z');
+  const AT_ELEVEN = new Date('2026-08-07T11:00:00.000Z');
+
+  it('resolves a quoted title to the real record id and stops at the gate', async () => {
+    const { provider } = scripted([
+      [{ name: 'create_task', args: { title: 'Ship the Nordwind deck' } }],
+      [],
+    ]);
+    await loop.runActLoop('create the deck task', { scope: personalScope(), provider, now: AT_TEN });
+    const tasks = await store.readCollection(personalScope(), 'tasks');
+    const created = tasks.find((task) => task.title === 'Ship the Nordwind deck');
+    expect(created).toBeDefined();
+
+    const result = await loop.runActLoop('delete the task "Ship the Nordwind deck"', {
+      scope: personalScope(),
+      provider: local,
+      now: AT_TEN,
+    });
+    expect(result.intent).toBe('command');
+    expect(result.haltedBecause).toBe('awaiting-approval');
+    expect(result.steps[0]!.toolId).toBe('delete_record');
+    expect(result.steps[0]!.awaitingApproval).toBe(true);
+    // The preview names the real record, not the words the founder used as an id.
+    expect(result.steps[0]!.summary).toContain(created!.id);
+  }, 30_000);
+
+  it('refuses an ambiguous name and lists the candidates instead of guessing', async () => {
+    const { provider } = scripted([
+      [
+        { name: 'create_task', args: { title: 'Alpha report' } },
+        { name: 'create_task', args: { title: 'Alpha report v2' } },
+      ],
+      [],
+    ]);
+    await loop.runActLoop('create the alpha tasks', { scope: personalScope(), provider, now: AT_ELEVEN });
+
+    const result = await loop.runActLoop('delete the task "Alpha"', {
+      scope: personalScope(),
+      provider: local,
+      now: AT_ELEVEN,
+    });
+    expect(result.steps).toHaveLength(0);
+    expect(result.note).toMatch(/matches 2 records/);
+    expect(result.note).toMatch(/Nothing was deleted/);
+    const tasks = await store.readCollection(personalScope(), 'tasks');
+    expect(tasks.filter((task) => task.title.startsWith('Alpha report'))).toHaveLength(2);
   }, 30_000);
 });

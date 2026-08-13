@@ -449,6 +449,7 @@ function makeFinance(rng: Rng, now: Date): FinanceEntry[] {
       label: 'Monthly draw',
       confidence,
       recurring: true,
+      simulated: true,
     });
     for (const [category, lo, hi, recurring] of costs) {
       if (hi === 0) continue;
@@ -461,6 +462,7 @@ function makeFinance(rng: Rng, now: Date): FinanceEntry[] {
         label: category,
         confidence,
         recurring,
+        simulated: true,
       });
     }
   }

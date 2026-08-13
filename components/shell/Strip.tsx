@@ -35,22 +35,26 @@ export function Strip({ snapshot }: { snapshot: OverviewSnapshot }) {
   const { money, energy } = snapshot;
   const awaiting = snapshot.upgradesAwaiting + snapshot.unreadNotifications;
 
+  // No ledger rows this month is absence, not zero francs — and sums that
+  // include generator-invented rows must say so, here of all places.
+  const moneySuffix = money.includesSimulated ? 'incl. simulated' : undefined;
+  const moneyCell = (id: string, label: string, minor: number): CellSpec => ({
+    id,
+    label,
+    value: money.entries === 0 ? EMPTY : formatMinorAmount(minor, money.currency, { compact: true }),
+    ...(money.entries === 0
+      ? { suffix: 'no entries yet' }
+      : moneySuffix
+        ? { suffix: moneySuffix }
+        : {}),
+  });
+
   const cells: CellSpec[] = [
+    moneyCell('revenue', 'Revenue · MTD', money.inMinor),
+    moneyCell('costs', 'Costs · MTD', money.outMinor),
     {
-      id: 'revenue',
-      label: 'Revenue · MTD',
-      value: formatMinorAmount(money.inMinor, money.currency, { compact: true }),
-    },
-    {
-      id: 'costs',
-      label: 'Costs · MTD',
-      value: formatMinorAmount(money.outMinor, money.currency, { compact: true }),
-    },
-    {
-      id: 'profit',
-      label: 'Profit · MTD',
-      value: formatMinorAmount(money.netMinor, money.currency, { compact: true }),
-      tone: money.netMinor >= 0 ? 'good' : 'bad',
+      ...moneyCell('profit', 'Profit · MTD', money.netMinor),
+      ...(money.entries === 0 ? {} : { tone: money.netMinor >= 0 ? ('good' as const) : ('bad' as const) }),
     },
     {
       id: 'energy',

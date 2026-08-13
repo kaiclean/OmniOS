@@ -295,6 +295,12 @@ export async function ask(
     outputs: composition.outputs,
   });
 
+  // A command gets a receipt, not a briefing. Observed live: "/task …" was
+  // confirmed in one line and then buried under a marketing report, because the
+  // composition was appended to every reply regardless of what the founder
+  // asked for. When the turn was an instruction, what happened *is* the answer.
+  const commandTurn = slash !== null || loopResult?.intent === 'command';
+
   let text = composition.body;
   let simulated = true;
   let tokensIn: number | undefined;
@@ -312,7 +318,7 @@ export async function ask(
           .join('\n')}`
       : '';
 
-  if (!provider.simulated) {
+  if (!provider.simulated && !commandTurn) {
     try {
       const workspace = await getWorkspace();
       const response = await provider.complete({
@@ -365,7 +371,9 @@ export async function ask(
     }
   }
 
-  if (actLines.length > 0) {
+  if (commandTurn && actLines.length > 0) {
+    text = actLines.join('\n');
+  } else if (actLines.length > 0) {
     text = `${actLines.join('\n')}\n\n${text}`;
   }
 
@@ -381,7 +389,9 @@ export async function ask(
     role: 'assistant',
     text,
     at: finishedAt,
-    plan,
+    // A command's reply is a receipt; attaching the routing plan would claim
+    // specialists were consulted on an instruction none of them touched.
+    ...(commandTurn ? {} : { plan }),
     simulated,
     providerId: provider.id,
     ...(options.channel ? { channel: options.channel } : {}),

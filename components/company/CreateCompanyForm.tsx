@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 
 import { COMPANY_STAGES, CURRENCIES } from '@/lib/domain';
 import { createCompany, type CreateCompanyState } from '@/lib/actions/companies';
@@ -14,6 +14,9 @@ export function CreateCompanyForm({
   generates: ReadonlyArray<{ label: string; detail: string }>;
 }) {
   const [state, action, pending] = useActionState(createCompany, INITIAL);
+  // Mirrors the checkbox so the sidebar can tell the truth about what will be
+  // generated — the promised example data would be a lie in clean-slate mode.
+  const [cleanSlate, setCleanSlate] = useState(false);
 
   return (
     <form action={action} className="grid">
@@ -93,6 +96,23 @@ export function CreateCompanyForm({
             textarea
           />
 
+          <div className="field">
+            <label className="check-chip">
+              <input
+                type="checkbox"
+                name="cleanSlate"
+                checked={cleanSlate}
+                onChange={(event) => setCleanSlate(event.target.checked)}
+              />
+              This company is real — start with a clean slate
+            </label>
+            <span className="hint">
+              No example data at all: just the structure, the DNA to edit, and the goals you typed
+              as real records. Leave it off to explore OmniOS with a fully populated demo
+              headquarters instead — everything invented is labelled.
+            </span>
+          </div>
+
           {state.message ? (
             <p className="note note--warn" role="alert">
               {state.message}
@@ -115,19 +135,44 @@ export function CreateCompanyForm({
           <h2 className="panel-title">What you get</h2>
         </header>
         <div className="panel-body stack" style={{ gap: 'var(--s-4)' }}>
-          <p className="hint">
-            The moment you submit, OmniOS generates a complete, populated headquarters. You do not
-            configure it, and you do not build it capability by capability.
-          </p>
-          {generates.map((item) => (
-            <div key={item.label} className="row" style={{ alignItems: 'flex-start' }}>
-              <Icon name="check" />
-              <div className="grow">
-                <div style={{ fontSize: 'var(--fs-small)' }}>{item.label}</div>
-                <div className="hint">{item.detail}</div>
-              </div>
-            </div>
-          ))}
+          {cleanSlate ? (
+            <>
+              <p className="hint">
+                A clean slate holds only what is true: the capability structure, a DNA scaffold
+                you edit, and your goals as real records. Every number starts as an em dash and
+                fills in as you and your AI team actually work.
+              </p>
+              {[
+                { label: 'Every capability, empty', detail: 'Marketing to finance, ready but silent' },
+                { label: 'Your goals as real records', detail: 'Exactly what you typed, nothing added' },
+                { label: 'No invented data', detail: 'No ledger, no pipeline, no fake momentum' },
+              ].map((item) => (
+                <div key={item.label} className="row" style={{ alignItems: 'flex-start' }}>
+                  <Icon name="check" />
+                  <div className="grow">
+                    <div style={{ fontSize: 'var(--fs-small)' }}>{item.label}</div>
+                    <div className="hint">{item.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              <p className="hint">
+                The moment you submit, OmniOS generates a complete, populated headquarters. You do
+                not configure it, and you do not build it capability by capability.
+              </p>
+              {generates.map((item) => (
+                <div key={item.label} className="row" style={{ alignItems: 'flex-start' }}>
+                  <Icon name="check" />
+                  <div className="grow">
+                    <div style={{ fontSize: 'var(--fs-small)' }}>{item.label}</div>
+                    <div className="hint">{item.detail}</div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </aside>
     </form>

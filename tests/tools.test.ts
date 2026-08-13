@@ -17,6 +17,7 @@ import {
   PARAM_TYPES,
   RISK_TIERS,
   companyScope,
+  isDecidedCall,
   personalScope,
   requiresApproval,
   sharedScope,
@@ -434,5 +435,21 @@ describe('lookup and routing', () => {
   it('is deterministic', () => {
     const prompt = 'automate this weekly and send an email about it';
     expect(scoreTools(prompt).map((s) => s.tool.id)).toEqual(scoreTools(prompt).map((s) => s.tool.id));
+  });
+});
+
+describe('what counts as a decision', () => {
+  const at = '2026-08-07T12:00:00.000Z';
+  it('an auto-run low-risk call is activity, not an approval', () => {
+    expect(isDecidedCall({ status: 'executed', decidedAt: undefined })).toBe(false);
+    expect(isDecidedCall({ status: 'failed', decidedAt: undefined })).toBe(false);
+  });
+  it('approved, rejected and grant-covered calls are decisions', () => {
+    expect(isDecidedCall({ status: 'executed', decidedAt: at })).toBe(true);
+    expect(isDecidedCall({ status: 'rejected', decidedAt: at })).toBe(true);
+  });
+  it('a call still waiting is not decided, whatever fields it carries', () => {
+    expect(isDecidedCall({ status: 'awaiting-approval', decidedAt: at })).toBe(false);
+    expect(isDecidedCall({ status: 'awaiting-approval', decidedAt: undefined })).toBe(false);
   });
 });
