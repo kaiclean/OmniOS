@@ -31,16 +31,23 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
     redirect('/');
   }
 
-  if (!limiter.allow()) {
-    return { error: 'Too many attempts — wait a minute and try again.' };
-  }
-
   const submitted = formData.get('key');
   if (typeof submitted !== 'string' || submitted.length === 0) {
     return { error: 'Enter the access key.' };
   }
+
+  // The correct key is honoured before the rate limiter is even consulted, so a
+  // flood of wrong guesses can never lock the founder out of their own OS — a
+  // global limiter checked first turned "throttle a dictionary attack" into
+  // "an attacker with no key can deny the founder access". Only *failed*
+  // attempts consume the budget; the key itself is high-entropy, which is the
+  // real defence against brute force.
   if (!safeEqual(submitted, accessKey)) {
-    return { error: 'That is not the access key.' };
+    return {
+      error: limiter.allow()
+        ? 'That is not the access key.'
+        : 'Too many attempts — wait a minute and try again.',
+    };
   }
 
   const token = await issueToken(await deriveSessionKey(accessKey));
