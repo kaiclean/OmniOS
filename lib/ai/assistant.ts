@@ -43,6 +43,15 @@ import { NOT_WIRED_TOOL_IDS } from './tools/executors';
  */
 const FOUNDER_CHANNEL = 'founder';
 
+/** The verbs the composer can always take — offered wherever a reply would otherwise be a dead end. */
+const STANDING_VERB_ACTIONS: readonly { label: string; insert: string }[] = [
+  { label: 'Create a task…', insert: '/task ' },
+  { label: 'Set a goal…', insert: '/goal ' },
+  { label: 'Write a doc…', insert: '/doc ' },
+  { label: 'Flag a risk…', insert: '/risk ' },
+  { label: 'Remember a fact…', insert: '/remember ' },
+];
+
 /**
  * Assemble the context a target is allowed to see.
  *
@@ -233,6 +242,39 @@ export async function ask(
   // the page being looked at, or nowhere. Every planned call goes through the
   // same propose→gate path as a typed form.
   const provider = await activeProvider();
+
+  // "What model are you?" is a question about the system, and the system knows
+  // the answer — replying "unknown" while the footer names the provider was a
+  // live-observed contradiction. Answered deterministically, from the same
+  // truth the footer uses, never routed to a specialist.
+  const selfTurn =
+    !slash &&
+    (/\b(model|llm|provider|specialists?)\b[^.?!]{0,24}\b(are you|do you|you (?:using|use|run|running)|is (?:this|answering))\b/i.test(
+      spoken,
+    ) ||
+      /\bwho are you\b|\bwhat can you do\b|\bhow do you work\b/i.test(spoken));
+
+  // "Yes, do both" after a reply that offered chips: the offers are structured
+  // now, so a short acceptance re-presents them instead of "I don't know what
+  // 'both' refers to" — the founder taps, the founder sends, the gate holds.
+  // When the prior reply carried no structured offers, the acceptance still
+  // gets the standing verbs rather than amnesia: the honest answer to "do it"
+  // is "here is what I can take directly", never a fresh briefing.
+  let acceptedActions: readonly { label: string; insert: string }[] | undefined;
+  let acceptedVerbatim = false;
+  if (!slash && !selfTurn && spoken.length <= 80 && /^(yes|ok(ay)?|do it|both|go ahead|lets?['’]?s? (do|take|try)|continue|proceed)\b/i.test(spoken.trim())) {
+    const priorReplies = (await conversation(target, options.channel)).filter(
+      (entry) => entry.role === 'assistant',
+    );
+    const prior = priorReplies[priorReplies.length - 1];
+    if (prior?.actions?.length) {
+      acceptedActions = prior.actions;
+      acceptedVerbatim = true;
+    } else if (prior) {
+      acceptedActions = STANDING_VERB_ACTIONS;
+    }
+  }
+  const metaTurn = selfTurn || acceptedActions !== undefined;
   const actScope: Scope | null =
     target.kind === 'space'
       ? target.scope
@@ -242,7 +284,7 @@ export async function ask(
 
   const actLines: string[] = [];
   let loopResult: LoopResult | undefined;
-  if (actScope && actScope.kind !== 'shared') {
+  if (!metaTurn && actScope && actScope.kind !== 'shared') {
     if (slash?.parseError) {
       // The command was recognised but its input was not usable — the reply is
       // the registry's own guidance, not a briefing.
@@ -270,7 +312,14 @@ export async function ask(
         now,
         ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
       });
-      actLines.push(...describeLoop(loopResult));
+      // A question's internal lookups are working, not news. Observed live:
+      // "What should we do next?" opened with four "Done: Nothing in this
+      // space matches …" search receipts before the actual answer. On a
+      // command turn every receipt IS the answer and all lines stay; on a
+      // question turn only what needs the founder surfaces — gated calls,
+      // failures, halts and notes.
+      const lines = describeLoop(loopResult);
+      actLines.push(...(loopResult.intent === 'command' ? lines : lines.filter((line) => !line.startsWith('Done: '))));
     }
   } else if (slash) {
     actLines.push('A /command acts inside a space — open a company or your life first.');
@@ -328,6 +377,21 @@ export async function ask(
   const commandTurn = slash !== null || loopResult?.intent === 'command';
 
   let text = composition.body;
+  if (selfTurn) {
+    const names = (roster ?? SPECIALISTS).map((specialist) => specialist.name);
+    const providerLine = provider.simulated
+      ? 'Right now I run on OmniOS’s deterministic local reasoning — no external model is connected, and every reply is grounded in your records and labelled as locally generated. Connect a provider key in the vault (Connections → Keys and secrets — for example OLLAMA_API_KEY or ANTHROPIC_API_KEY) and I answer through that model instead; the line under the composer always names what produced a reply.'
+      : `I answer through the ${provider.label} provider — the line under the composer names it on every reply — and everything I say is still grounded in your own records first.`;
+    text = [
+      providerLine,
+      `Routing is automatic: I read each question and hand it to the specialist who owns it — ${names.slice(0, 6).join(', ')}${names.length > 6 ? ` and ${names.length - 6} more` : ''} — or answer directly when no one clearly does. Say @engineer (or any name) to pick the voice yourself; the plan under each reply shows who was consulted.`,
+      'Direct verbs that always work, no model needed: /task, /goal, /doc, /risk, /expense, /income, /remember.',
+    ].join('\n\n');
+  } else if (acceptedActions) {
+    text = acceptedVerbatim
+      ? 'Those moves are one tap away — pick from the chips below, or name one and I’ll take it. Anything that deletes or reaches outside still stops for your approval.'
+      : 'I can’t tell exactly which offer you meant, so here are the moves I can always take directly — tap one, or say it precisely (for example: “create a task called …”).';
+  }
   let simulated = true;
   let tokensIn: number | undefined;
   let tokensOut: number | undefined;
@@ -344,7 +408,7 @@ export async function ask(
           .join('\n')}`
       : '';
 
-  if (!provider.simulated && !commandTurn) {
+  if (!provider.simulated && !commandTurn && !metaTurn) {
     try {
       const workspace = await getWorkspace();
       // The chat remembers itself: the last few turns of this same conversation
@@ -420,16 +484,12 @@ export async function ask(
   // the menu back at it — which the local path then could not parse. An offer
   // that cannot be taken by tapping it is a menu, not an ability.
   const actions: { label: string; insert: string }[] = [];
-  if (slash?.parseError) {
+  if (acceptedActions) {
+    actions.push(...acceptedActions);
+  } else if (slash?.parseError) {
     actions.push({ label: `Retry /${slash.label}`, insert: `/${slash.label} ` });
-  } else if (!slash && composition.orientation && actScope && actScope.kind !== 'shared') {
-    actions.push(
-      { label: 'Create a task…', insert: '/task ' },
-      { label: 'Set a goal…', insert: '/goal ' },
-      { label: 'Write a doc…', insert: '/doc ' },
-      { label: 'Flag a risk…', insert: '/risk ' },
-      { label: 'Remember a fact…', insert: '/remember ' },
-    );
+  } else if (!slash && !selfTurn && composition.orientation && actScope && actScope.kind !== 'shared') {
+    actions.push(...STANDING_VERB_ACTIONS);
   }
 
   const finishedAt = new Date().toISOString();
@@ -449,8 +509,9 @@ export async function ask(
     text,
     at: finishedAt,
     // A command's reply is a receipt; attaching the routing plan would claim
-    // specialists were consulted on an instruction none of them touched.
-    ...(commandTurn ? {} : { plan }),
+    // specialists were consulted on an instruction none of them touched — and a
+    // meta turn (about the system, or re-offering chips) consulted nobody.
+    ...(commandTurn || metaTurn ? {} : { plan }),
     ...(actions.length > 0 ? { actions } : {}),
     simulated,
     providerId: provider.id,

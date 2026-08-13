@@ -228,3 +228,49 @@ describe('an offer you can tap is an ability; a menu you must retype is not', ()
     expect(result.message.actions?.[0]?.insert).toBe('/expense ');
   }, 60_000);
 });
+
+describe('the assistant knows what it is and holds a short thread of intent', () => {
+  const AT_NOON = new Date('2026-08-08T12:00:00.000Z');
+
+  it('"what model are you using?" gets the system truth, not "unknown"', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'What model are you using?',
+      AT_NOON,
+    );
+    expect(result.message.text).toMatch(/local reasoning|provider/i);
+    expect(result.message.text).not.toMatch(/unknown/i);
+    // Nobody was consulted for a question about the system itself.
+    expect(result.message.plan).toBeUndefined();
+  }, 60_000);
+
+  it('"what specialists…?" names the roster and how routing works', async () => {
+    const result = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'What specialists do you use?',
+      AT_NOON,
+    );
+    expect(result.message.text).toMatch(/Routing is automatic/);
+    expect(result.message.text).toMatch(/@engineer/);
+  }, 60_000);
+
+  it('a short acceptance after an offer re-presents the chips instead of amnesia', async () => {
+    const channel = 'thread:acceptance01';
+    const offer = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'Hello?',
+      AT_NOON,
+      { channel },
+    );
+    expect(offer.message.actions?.length).toBeGreaterThan(0);
+
+    const accept = await assistant.ask(
+      { kind: 'space', scope: personalScope() },
+      'Lets do both and continue with the next best steps',
+      new Date('2026-08-08T12:05:00.000Z'),
+      { channel },
+    );
+    expect(accept.message.text).toContain('one tap away');
+    expect(accept.message.actions?.length).toBe(offer.message.actions?.length);
+  }, 60_000);
+});
