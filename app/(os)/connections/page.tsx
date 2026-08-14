@@ -11,6 +11,9 @@ import {
   CONNECTOR_CATEGORIES,
   CONNECTOR_CATEGORY_LABELS,
   CONNECTOR_STATE_LABELS,
+  MCP_PRESETS,
+  connectionStatusFor,
+  presetOwnsServerId,
   referencedSecretNames,
   requiresApproval,
 } from '@/lib/domain';
@@ -31,15 +34,20 @@ function catalogState(
       entry.id === 'ollama-cloud' ? 'ollama' : entry.id === 'anthropic' ? 'anthropic' : 'openai';
     return providers.find((p) => p.id === providerId)?.available ? 'connected' : 'needs-key';
   }
-  const server = entry.presetId
-    ? workspace.mcpServers.find(
-        (candidate) => candidate.id === entry.presetId || candidate.id.startsWith(`${entry.presetId}-`),
-      )
+  const preset = entry.presetId
+    ? MCP_PRESETS.find((candidate) => candidate.id === entry.presetId)
+    : undefined;
+  const server = preset
+    ? workspace.mcpServers.find((candidate) => presetOwnsServerId(preset, candidate.id))
     : undefined;
   if (server) {
     const state = workspace.mcpStates.find((candidate) => candidate.serverId === server.id);
-    if (state?.status === 'connected') return 'connected';
-    if (state?.status === 'error' || server.lastError) return 'error';
+    // Same derivation as the ConnectionCard, so this row can never contradict
+    // the card for the same server further down the page.
+    const status = connectionStatusFor(server, state);
+    if (status === 'connected') return 'connected';
+    if (status === 'needs-setup') return 'needs-setup';
+    if (status === 'error' || server.lastError) return 'error';
     return 'configured';
   }
   return entry.presetId ? 'one-click' : 'needs-server';
@@ -92,7 +100,9 @@ export default async function ConnectionsPage() {
 
   const bridged = mcpToolDefinitions(workspace.mcpServers, workspace.mcpStates);
   const gatedTools = bridged.filter((tool) => requiresApproval(tool.risk)).length;
-  const connected = servers.filter((server) => stateFor(server.id)?.status === 'connected' && server.enabled);
+  const connected = servers.filter(
+    (server) => connectionStatusFor(server, stateFor(server.id)) === 'connected',
+  );
 
   // What the workspace is already asking for, so the founder is not left guessing
   // which name a placeholder expects. Providers appear here too: a key is a key.

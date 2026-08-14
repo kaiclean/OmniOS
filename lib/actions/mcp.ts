@@ -7,14 +7,16 @@ import {
   MCP_AUTONOMY,
   MCP_PRESETS,
   MCP_TRANSPORTS,
+  configGaps,
   credentialShape,
   isValidServerId,
+  redact,
   referencedSecretNames,
 } from '@/lib/domain';
 import type { McpConnectionState, McpServerConfig } from '@/lib/domain';
 import { getWorkspace, saveWorkspace } from '@/lib/data/store';
 import { probeServer } from '@/lib/mcp/client';
-import { hasSecret } from '@/lib/secrets/vault';
+import { allSecretValues, hasSecret } from '@/lib/secrets/vault';
 
 /**
  * Connections — adding, editing and probing the servers OmniOS can reach.
@@ -249,9 +251,10 @@ export async function addMcpPreset(presetId: string): Promise<McpFormState> {
     ...(preset.transport === 'stdio'
       ? { command: preset.command ?? '', args: [...(preset.args ?? [])], env }
       : { url: preset.url ?? '', headers: {} }),
-    // Added switched off on purpose. A preset carries placeholders and sometimes a
-    // `<PATH>` the founder still has to fill in, so connecting it immediately would
-    // spawn a process that is guaranteed to fail and blame the server for it.
+    // Added switched off on purpose. A preset carries placeholders the founder
+    // still has to fill in — the probe now refuses `<PATH>`-style gaps outright,
+    // but a missing secret (github, slack) would still spawn and fail, and an
+    // enabled-but-unconfigured row implies a promise nobody made.
     enabled: false,
     autonomy: preset.suggestedAutonomy,
     capabilityId: preset.capabilityId,
@@ -326,7 +329,30 @@ export async function probeMcpServer(serverId: string): Promise<McpConnectionSta
   const config = workspace.mcpServers.find((server) => server.id === serverId);
   if (!config) return null;
 
-  const state = await probeServer(config);
+  // A config that still carries a preset placeholder cannot possibly connect —
+  // spawning it would manufacture a failure that blames the server. Refuse
+  // before the spawn and persist the actual problem instead, so the card and
+  // the assistant both say "fill this in", not "the server is broken".
+  const gaps = configGaps(config);
+  const probed: McpConnectionState = gaps.length
+    ? {
+        serverId: config.id,
+        status: 'needs-setup',
+        tools: [],
+        error: `Not connected: this connection still needs ${gaps.join(' and ')}. Edit it and replace the placeholder.`,
+        checkedAt: new Date().toISOString(),
+      }
+    : await probeServer(config);
+
+  // A server's failure message can echo whatever was handed to it — including
+  // a connection string a founder typed into args. The stored error is rendered
+  // on three pages and read into the assistant's grounding, so it gets the same
+  // last-line redaction pass every tool outcome gets.
+  const secretValues = await allSecretValues();
+  const state: McpConnectionState =
+    probed.error && secretValues.length > 0
+      ? { ...probed, error: redact(probed.error, secretValues) }
+      : probed;
   const now = new Date().toISOString();
 
   await saveWorkspace((current) => ({
@@ -339,9 +365,14 @@ export async function probeMcpServer(serverId: string): Promise<McpConnectionSta
             updatedAt: now,
             ...(state.status === 'connected'
               ? { lastConnectedAt: state.checkedAt, lastError: undefined }
-              : state.error
-                ? { lastError: state.error }
-                : {}),
+              : state.status === 'needs-setup'
+                ? // The probe just established the problem is an unfilled
+                  // placeholder, not a failure — a stale failure from before
+                  // must not keep the catalog saying "failing".
+                  { lastError: undefined }
+                : state.status === 'error' && state.error
+                  ? { lastError: state.error }
+                  : {}),
           }
         : server,
     ),

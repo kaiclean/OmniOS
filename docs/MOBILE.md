@@ -19,6 +19,9 @@ FileVault and a lock screen are the tools.
 ## 1 · Prerequisites
 
 - A Mac that stays on (Mac Mini is ideal). Node 22+ (`brew install node`).
+- Optional, for the **Web fetch** connection preset: uv (`brew install uv`) —
+  that server is Python and launches through `uvx`. Every other stdio preset
+  needs only Node.
 - One of:
   - **Cloudflare Tunnel** — a public `https://os.your-domain.com` reachable
     from any network. Needs a domain on Cloudflare (free plan is fine).
