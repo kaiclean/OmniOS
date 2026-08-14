@@ -27,7 +27,7 @@ import 'server-only';
  * something and then use it.
  */
 
-import type { LlmProvider, Scope, ToolDefinition } from '@/lib/domain';
+import type { LlmMessage, LlmProvider, Scope, ToolDefinition } from '@/lib/domain';
 import { readCollection } from '@/lib/data/store';
 import type { CollectionName } from '@/lib/data/schema';
 import { detectAct, type PlannedCall } from './act';
@@ -75,11 +75,15 @@ async function resolveDeleteTarget(
 }
 
 /**
- * Four is enough for "look it up, then act on what you found", and short enough
- * that a model stuck in a groove costs seconds rather than a bill.
+ * Four rounds is enough for "look it up, then act on what you found". Twelve
+ * calls — the most four rounds can plan — is enough to stand up a whole
+ * delegated company in one turn: the space, goals, KPIs, a model doc, starting
+ * tasks and a cadence. Eight was not, and halting mid-setup with "say continue"
+ * made the commonest delegation feel broken. Both stay small enough that a
+ * model stuck in a groove costs seconds rather than a bill.
  */
 const MAX_ROUNDS = 4;
-const MAX_CALLS = 8;
+const MAX_CALLS = 12;
 
 export interface LoopStep {
   readonly toolId: string;
@@ -115,6 +119,8 @@ export async function runActLoop(
      * everything the space has.
      */
     readonly agent?: { readonly toolIds?: readonly string[]; readonly capabilityIds?: readonly string[] };
+    /** This conversation's recent turns — see `detectAct` on why the planner needs its own past. */
+    readonly history?: readonly LlmMessage[];
   },
 ): Promise<LoopResult> {
   const steps: LoopStep[] = [];
@@ -141,6 +147,7 @@ export async function runActLoop(
       provider: options.provider,
       now: options.now,
       tools,
+      ...(options.history ? { history: options.history } : {}),
       ...(options.preferCapabilityId ? { preferCapabilityId: options.preferCapabilityId } : {}),
     });
 

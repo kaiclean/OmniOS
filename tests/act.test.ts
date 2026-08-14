@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { detectActLocally, toolCatalogue, toolJsonSchema } from '@/lib/ai/act';
+import { detectAct, detectActLocally, toolCatalogue, toolJsonSchema } from '@/lib/ai/act';
 import { TOOLS } from '@/lib/ai/tools';
-import type { ToolDefinition } from '@/lib/domain';
+import type { LlmProvider, LlmRequest, LlmToolResponse, ToolDefinition } from '@/lib/domain';
 import { personalScope, requiresApproval } from '@/lib/domain';
 
 const NOW = new Date('2026-08-07T12:00:00.000Z');
@@ -161,5 +161,57 @@ describe('commands are spoken singular; collections are stored plural', () => {
     // "collection" alone is our word; the founder gets the description.
     expect(decision.note).toMatch(/which collection the record is in/i);
     expect(decision.note).not.toMatch(/\bneed collection\b/);
+  });
+});
+
+describe('the model planner sees this conversation, not one orphaned sentence', () => {
+  function capturing() {
+    const requests: LlmRequest[] = [];
+    const provider: LlmProvider = {
+      id: 'capturing',
+      label: 'Capturing',
+      simulated: false,
+      keyName: null,
+      available: async () => true,
+      complete: async () => ({ text: '', providerId: 'capturing', simulated: false }),
+      completeWithTools: async (request): Promise<LlmToolResponse> => {
+        requests.push(request);
+        return { text: '', calls: [] };
+      },
+    };
+    return { provider, requests };
+  }
+
+  it('threads history between the system prompt and the current sentence', async () => {
+    const { provider, requests } = capturing();
+    await detectAct('the first one', {
+      scope,
+      provider,
+      now: NOW,
+      history: [
+        { role: 'user', content: 'Create a company you will run.' },
+        { role: 'assistant', content: 'Fixed-price or retainer?' },
+      ],
+    });
+
+    const messages = requests[0]!.messages;
+    expect(messages[0]!.role).toBe('system');
+    expect(messages[1]).toEqual({ role: 'user', content: 'Create a company you will run.' });
+    expect(messages[2]).toEqual({ role: 'assistant', content: 'Fixed-price or retainer?' });
+    // The founder's answer stays last, so the planner reads it as the reply to
+    // what came before rather than as a self-contained order.
+    expect(messages[3]!.content).toContain('the first one');
+  });
+
+  it('tells the planner that delegated choices are its to make, and facts are not', async () => {
+    const { provider, requests } = capturing();
+    await detectAct('set it up', { scope, provider, now: NOW });
+
+    const system = requests[0]!.messages[0]!.content;
+    expect(system).toMatch(/Choices the founder handed to you are yours to make/);
+    expect(system).toMatch(/Facts are never yours to invent/);
+    // The old rule this replaced — refusing outright on any uncertain write —
+    // must not creep back in and turn every delegation into a questionnaire.
+    expect(system).not.toMatch(/plan nothing and say so/);
   });
 });
