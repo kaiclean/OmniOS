@@ -26,8 +26,24 @@ import type { McpConnectionState, McpServerConfig, McpToolDescriptor } from '@/l
 import { riskForMcpTool } from '@/lib/domain';
 import { resolveSecrets } from '@/lib/secrets/vault';
 
-const CONNECT_TIMEOUT_MS = 20_000;
-const CALL_TIMEOUT_MS = 120_000;
+/**
+ * Every stdio preset bootstraps through `npx` or `uvx`, and a cold first launch
+ * legitimately spends a minute downloading the package (the puppeteer/playwright
+ * servers pull a whole browser). At 20s a slow first launch was indistinguishable
+ * from a broken server — the probe timed out, recorded "error", and the founder
+ * saw a failure for a connection that would have worked. 90s covers a cold
+ * bootstrap on an ordinary connection; the env override exists for machines
+ * where even that is not enough.
+ */
+function timeoutFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const CONNECT_TIMEOUT_MS = timeoutFromEnv('OMNIOS_MCP_CONNECT_TIMEOUT_MS', 90_000);
+const CALL_TIMEOUT_MS = timeoutFromEnv('OMNIOS_MCP_CALL_TIMEOUT_MS', 120_000);
 
 async function resolveRecord(
   record: Readonly<Record<string, string>> | undefined,
@@ -75,12 +91,40 @@ const INHERITED_ENV = [
   'XDG_CACHE_HOME',
 ];
 
+/**
+ * Where the tools the presets depend on actually live when the app was not
+ * launched from a terminal. A launchd- or Finder-started process gets the
+ * stock `/usr/bin:/bin:...` PATH, which has neither Homebrew (`uvx`, often
+ * `node`/`npx`) nor uv's own installer target — so every stdio preset dies
+ * with `spawn uvx ENOENT` even though the tool is installed. Appending the
+ * well-known locations fixes that for every preset at once, without asking
+ * the founder to hardcode absolute paths into each connection. Paths are
+ * locations, not credentials, so widening PATH stays inside the same threat
+ * model as the cache variables above.
+ */
+export function augmentedPath(current: string | undefined): string {
+  const home = process.env.HOME;
+  const wellKnown = [
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    // uv's standalone installer targets ~/.local/bin today but used ~/.cargo/bin
+    // in earlier releases; both stay on the list because either may hold uvx.
+    ...(home ? [`${home}/.local/bin`, `${home}/.cargo/bin`] : []),
+  ];
+  const parts = current ? current.split(':') : [];
+  for (const dir of wellKnown) {
+    if (!parts.includes(dir)) parts.push(dir);
+  }
+  return parts.join(':');
+}
+
 function baseEnv(): Record<string, string> {
   const out: Record<string, string> = {};
   for (const key of INHERITED_ENV) {
     const value = process.env[key];
     if (value !== undefined) out[key] = value;
   }
+  out.PATH = augmentedPath(out.PATH);
   return out;
 }
 

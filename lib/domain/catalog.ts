@@ -67,7 +67,7 @@ export const CONNECTOR_CATALOG: readonly CatalogEntry[] = [
   { id: 'cloudflare', name: 'Cloudflare', category: 'development', unlocks: 'DNS, workers and storage for anything you host.', how: 'The official Cloudflare MCP server with an API token.' },
   { id: 'supabase', name: 'Supabase', category: 'development', unlocks: 'A real database behind a product.', how: 'The official Supabase MCP server with a project token.' },
   { id: 'postgres', name: 'Postgres', category: 'development', unlocks: 'Reading production data into Finance and Development.', presetId: 'postgres', how: 'The Postgres preset with a connection string in the vault.' },
-  { id: 'browser', name: 'Browser automation', category: 'development', unlocks: 'Anything that needs a real page — including sites with no API.', presetId: 'puppeteer', how: 'The Browser preset; no credentials needed.' },
+  { id: 'browser', name: 'Browser automation', category: 'development', unlocks: 'Anything that needs a real page — including sites with no API.', presetId: 'playwright', how: 'The Browser preset; no credentials needed.' },
   // Business
   { id: 'stripe', name: 'Stripe', category: 'business', unlocks: 'Payments, customers and revenue as they actually happen.', how: 'The official Stripe MCP server with a restricted API key.' },
   { id: 'social', name: 'Social platforms', category: 'business', unlocks: 'Publishing the content the Creative Studio produces, and reading what it earned.', how: 'A per-platform MCP server (X, LinkedIn, Instagram…) with that platform’s API credentials.' },
@@ -89,6 +89,9 @@ export const CONNECTOR_STATES = [
   // AI providers connect with a vault key, not a server — labelling them
   // 'needs an MCP server' sent founders hunting for one that does not exist.
   'needs-key',
+  // A configured server still carrying a preset placeholder. Distinct from
+  // 'error' — nothing failed, the founder just has not finished setting it up.
+  'needs-setup',
 ] as const;
 export type ConnectorState = (typeof CONNECTOR_STATES)[number];
 
@@ -99,4 +102,5 @@ export const CONNECTOR_STATE_LABELS: Record<ConnectorState, string> = {
   'one-click': 'Preset available',
   'needs-server': 'Needs an MCP server',
   'needs-key': 'Needs a key in the vault',
+  'needs-setup': 'Configured · needs setup',
 };

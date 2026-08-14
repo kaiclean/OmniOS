@@ -79,6 +79,49 @@ describe('it is honest about the outward gap, and does not deflect', () => {
     });
     expect(text).toContain('0 currently reachable');
   });
+
+  it('quotes the failing connection’s stored reason, not just the count', () => {
+    const text = describeSelf({
+      ...base,
+      servers: [{ id: 'fetch', name: 'Web fetch', enabled: true, transport: 'stdio', args: ['mcp-server-fetch'] } as never],
+      states: [
+        {
+          serverId: 'fetch',
+          status: 'error',
+          error: 'Command not found. Check that it is installed and on PATH. (spawn uvx ENOENT)',
+        } as never,
+      ],
+    });
+    expect(text).toContain('spawn uvx ENOENT');
+    expect(text).toContain('Web fetch');
+  });
+
+  it('says a placeholder config needs setup rather than calling it broken', () => {
+    const text = describeSelf({
+      ...base,
+      servers: [
+        {
+          id: 'filesystem',
+          name: 'Filesystem',
+          enabled: true,
+          transport: 'stdio',
+          args: ['-y', '@modelcontextprotocol/server-filesystem', '<ABSOLUTE_PATH>'],
+        } as never,
+      ],
+      states: [],
+    });
+    expect(text).toContain('a directory path');
+    expect(text).not.toContain('no error was recorded');
+  });
+
+  it('names a configured server the founder simply never connected', () => {
+    const text = describeSelf({
+      ...base,
+      servers: [{ id: 'fetch', name: 'Web fetch', enabled: true, transport: 'stdio', args: ['mcp-server-fetch'] } as never],
+      states: [],
+    });
+    expect(text).toContain('not yet connected — nothing is known about this configuration');
+  });
 });
 
 describe('it cannot go stale', () => {

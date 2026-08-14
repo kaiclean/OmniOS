@@ -5,7 +5,7 @@ import { acrossSpaces, loadSpaces } from '@/lib/data/aggregate';
 import { getWorkspace } from '@/lib/data/store';
 import { listGrants } from '@/lib/actions/grants';
 import { listSecrets } from '@/lib/secrets/vault';
-import { RISK_EXPLANATION, RISK_TIERS, grantActive } from '@/lib/domain';
+import { RISK_EXPLANATION, RISK_TIERS, connectionStatusFor, grantActive } from '@/lib/domain';
 import { EMPTY, formatNumber, formatRelative, pluralise } from '@/lib/format';
 import {
   Badge,
@@ -221,14 +221,29 @@ export default async function SecurityPage() {
                 const serverGrants = grants.filter(
                   (entry) => entry.grant.serverId === server.id && entry.active,
                 ).length;
+                // Derived, not the raw stored token — the same status the
+                // Connections page shows, so the two pages cannot disagree.
+                // A tool count is only a fact once a connect succeeded; before
+                // that it is absence, and absence is an em dash, not a zero.
+                const status = connectionStatusFor(server, state);
+                const toolCount =
+                  status === 'connected' ? `${state?.tools.length ?? 0} tools` : `${EMPTY} tools`;
                 return (
                   <ListRow
                     key={server.id}
                     primary={server.name}
-                    secondary={`autonomy: ${server.autonomy} · ${state ? `${state.tools.length} tools` : 'never probed'} · ${pluralise(serverGrants, 'active grant')}`}
+                    secondary={`autonomy: ${server.autonomy} · ${toolCount} · ${pluralise(serverGrants, 'active grant')}`}
                     trailing={
-                      <Badge tone={state?.status === 'connected' ? 'ok' : state?.status === 'error' ? 'deny' : 'outline'}>
-                        {state?.status ?? 'never connected'}
+                      <Badge
+                        tone={
+                          status === 'connected'
+                            ? 'ok'
+                            : status === 'error' || status === 'needs-setup'
+                              ? 'deny'
+                              : 'outline'
+                        }
+                      >
+                        {status === 'needs-setup' ? 'needs setup' : status.replace('-', ' ')}
                       </Badge>
                     }
                   />

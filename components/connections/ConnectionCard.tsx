@@ -3,7 +3,12 @@
 import { useState, useTransition } from 'react';
 
 import type { McpAutonomy, McpConnectionState, McpServerConfig, RiskTier } from '@/lib/domain';
-import { MCP_AUTONOMY_EXPLANATION, requiresApproval } from '@/lib/domain';
+import {
+  MCP_AUTONOMY_EXPLANATION,
+  configGaps,
+  connectionStatusFor,
+  requiresApproval,
+} from '@/lib/domain';
 import { formatRelative } from '@/lib/format';
 import {
   probeMcpServer,
@@ -45,7 +50,8 @@ export function ConnectionCard({
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  const status = server.enabled ? (state?.status ?? 'never-connected') : 'disabled';
+  const status = connectionStatusFor(server, state);
+  const gaps = configGaps(server);
   const tools = state?.tools ?? [];
   const gated = tools.filter((tool) => requiresApproval(tool.risk)).length;
 
@@ -107,6 +113,13 @@ export function ConnectionCard({
             <span className="mono" style={{ overflowWrap: 'anywhere' }}>
               {state.error}
             </span>
+          </Note>
+        ) : null}
+
+        {status === 'needs-setup' ? (
+          <Note tone="warn" icon="alert">
+            This connection still needs {gaps.join(' and ')} before it can work. Edit it and
+            replace the placeholder — Connect will refuse until it is filled in.
           </Note>
         ) : null}
 
@@ -239,6 +252,8 @@ function StatusBadge({ status }: { status: McpConnectionState['status'] }) {
       return <Badge tone="warn">Failed</Badge>;
     case 'disabled':
       return <Badge tone="outline">Disabled</Badge>;
+    case 'needs-setup':
+      return <Badge tone="warn">Needs setup</Badge>;
     default:
       return <Badge tone="outline">Never connected</Badge>;
   }

@@ -5,7 +5,17 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type { McpServerConfig, McpToolDescriptor, RiskTier } from '@/lib/domain';
-import { RISK_TIERS, mcpToolId, parseMcpToolId, requiresApproval, riskForMcpTool, MCP_PRESETS} from '@/lib/domain';
+import {
+  RISK_TIERS,
+  configGaps,
+  connectionStatusFor,
+  mcpToolId,
+  parseMcpToolId,
+  presetOwnsServerId,
+  requiresApproval,
+  riskForMcpTool,
+  MCP_PRESETS,
+} from '@/lib/domain';
 import { mcpToolDefinition, mcpToolDefinitions, paramsFromSchema } from '@/lib/ai/tools/mcp-bridge';
 
 /**
@@ -320,6 +330,80 @@ describe('tool identifiers', () => {
  * that reaches the npm registry has no business failing a build over someone
  * else's outage.
  */
+describe('unfilled placeholders', () => {
+  it('names every gap a preset ships, in founder words', () => {
+    const byId = (id: string) => {
+      const preset = MCP_PRESETS.find((candidate) => candidate.id === id);
+      if (!preset) throw new Error(`no preset ${id}`);
+      return preset;
+    };
+    expect(configGaps(byId('filesystem'))).toEqual(['a directory path']);
+    expect(configGaps(byId('postgres'))).toEqual(['a connection string']);
+    expect(configGaps(byId('custom-http'))).toEqual(['its real URL']);
+    // Ready-to-run presets must never be told they need something.
+    expect(configGaps(byId('fetch'))).toEqual([]);
+    expect(configGaps(byId('playwright'))).toEqual([]);
+  });
+
+  it('names every placeholder in a single argument, not just the first', () => {
+    const gaps = configGaps({
+      transport: 'stdio',
+      args: ['postgresql://<USER>:<PASSWORD>@localhost/db'],
+    });
+    expect(gaps).toEqual(['a value for <USER>', 'a value for <PASSWORD>']);
+  });
+
+  it('outranks any stored probe result — a probe of a placeholder config describes nothing', () => {
+    const unfilled = config({ args: ['-y', 'some-server', '<ABSOLUTE_PATH>'] });
+    expect(connectionStatusFor(unfilled, { status: 'error' })).toBe('needs-setup');
+    expect(connectionStatusFor(unfilled, undefined)).toBe('needs-setup');
+  });
+
+  it('drops a stale needs-setup once the founder fills the placeholder in', () => {
+    expect(connectionStatusFor(config(), { status: 'needs-setup' })).toBe('never-connected');
+  });
+
+  it('keeps disabled above everything, and passes real statuses through', () => {
+    expect(connectionStatusFor(config({ enabled: false }), { status: 'connected' })).toBe('disabled');
+    expect(connectionStatusFor(config(), { status: 'error' })).toBe('error');
+    expect(connectionStatusFor(config(), undefined)).toBe('never-connected');
+  });
+});
+
+describe('the spawn PATH', () => {
+  it('appends the tool dirs a launchd-started app lacks, after whatever was inherited', () => {
+    const path = client.augmentedPath('/usr/bin:/bin');
+    expect(path.startsWith('/usr/bin:/bin:')).toBe(true);
+    expect(path.split(':')).toContain('/opt/homebrew/bin');
+    expect(path.split(':')).toContain('/usr/local/bin');
+  });
+
+  it('never duplicates a dir that is already on PATH', () => {
+    const path = client.augmentedPath('/opt/homebrew/bin:/usr/bin');
+    expect(path.split(':').filter((dir) => dir === '/opt/homebrew/bin')).toHaveLength(1);
+  });
+});
+
+describe('preset upstreams', () => {
+  it('runs the browser through the maintained Playwright server, never the archived puppeteer one', () => {
+    const browser = MCP_PRESETS.find((preset) => preset.name === 'Browser');
+    expect(browser?.args?.join(' ')).toContain('@playwright/mcp');
+    for (const preset of MCP_PRESETS) {
+      expect(preset.args?.join(' ') ?? '', preset.id).not.toContain('server-puppeteer');
+    }
+  });
+
+  it('still owns servers added under the former preset id, so no workspace is orphaned', () => {
+    const browser = MCP_PRESETS.find((preset) => preset.name === 'Browser');
+    if (!browser) throw new Error('no browser preset');
+    expect(presetOwnsServerId(browser, 'puppeteer')).toBe(true);
+    expect(presetOwnsServerId(browser, 'puppeteer-2')).toBe(true);
+    expect(presetOwnsServerId(browser, 'playwright')).toBe(true);
+    // Prefix without the separator is a different server, not a copy.
+    expect(presetOwnsServerId(browser, 'puppeteer2')).toBe(false);
+  });
+});
+
 describe('preset commands are installable', () => {
   it('runs each stdio preset through a launcher the founder can be told to install', () => {
     const launchers = new Set(['npx', 'uvx', 'docker']);

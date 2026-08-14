@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 
-import { MCP_PRESETS } from '@/lib/domain';
+import { MCP_PRESETS, configGaps, presetOwnsServerId } from '@/lib/domain';
 import { addMcpPreset } from '@/lib/actions/mcp';
 import { Badge } from '@/components/ui/primitives';
 
@@ -22,7 +22,11 @@ export function PresetPicker({ existingIds }: { existingIds: readonly string[] }
     <div className="stack" style={{ gap: 'var(--s-4)' }}>
       <div className="list">
         {MCP_PRESETS.map((preset) => {
-          const already = existingIds.includes(preset.id);
+          const already = existingIds.some((id) => presetOwnsServerId(preset, id));
+          // Env keys were badged from day one; the positional placeholders
+          // (a directory path, a connection string, a URL) were not, so those
+          // presets looked one-click when they were three-step.
+          const gaps = configGaps(preset);
           return (
             <div key={preset.id} className="list-row">
               <div className="grow">
@@ -32,6 +36,7 @@ export function PresetPicker({ existingIds }: { existingIds: readonly string[] }
                   {preset.envKeys?.length ? (
                     <Badge tone="outline">needs {preset.envKeys.join(', ')}</Badge>
                   ) : null}
+                  {gaps.length > 0 ? <Badge tone="outline">needs {gaps.join(', ')}</Badge> : null}
                 </div>
                 <div className="list-secondary">{preset.unlocks}</div>
               </div>

@@ -85,7 +85,19 @@ export interface McpToolDescriptor {
   readonly risk: RiskTier;
 }
 
-export const MCP_STATUSES = ['connected', 'error', 'disabled', 'never-connected'] as const;
+export const MCP_STATUSES = [
+  'connected',
+  'error',
+  'disabled',
+  'never-connected',
+  /**
+   * The configuration still carries a preset placeholder the founder has to
+   * replace. Distinct from 'error' because nothing failed — probing it would
+   * spawn a process that is guaranteed to die and blame the server for it, so
+   * the probe refuses and says what is missing instead.
+   */
+  'needs-setup',
+] as const;
 export type McpStatus = (typeof MCP_STATUSES)[number];
 
 export interface McpConnectionState {
@@ -223,6 +235,23 @@ export interface McpPreset {
   readonly capabilityId: string;
   readonly suggestedAutonomy: McpAutonomy;
   readonly unlocks: string;
+  /**
+   * Ids this preset used to ship under. Servers persist the preset id as their
+   * own id, so a rename without this list orphans every workspace that added
+   * the preset before the rename — the catalog offers it as never-added while
+   * the founder's configured copy sits right there.
+   */
+  readonly formerIds?: readonly string[];
+}
+
+/** Whether a persisted server id came from this preset, under any of its ids. */
+export function presetOwnsServerId(
+  preset: Pick<McpPreset, 'id' | 'formerIds'>,
+  serverId: string,
+): boolean {
+  return [preset.id, ...(preset.formerIds ?? [])].some(
+    (id) => serverId === id || serverId.startsWith(`${id}-`),
+  );
 }
 
 export const MCP_PRESETS: readonly McpPreset[] = [
@@ -256,7 +285,7 @@ export const MCP_PRESETS: readonly McpPreset[] = [
   {
     id: 'github',
     name: 'GitHub',
-    description: 'Repositories, issues and pull requests.',
+    description: 'Repositories, issues and pull requests. Upstream reference server is deprecated but still runs.',
     transport: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-github'],
@@ -266,20 +295,28 @@ export const MCP_PRESETS: readonly McpPreset[] = [
     unlocks: 'Shipping code changes and tracking work in the Development capability.',
   },
   {
-    id: 'puppeteer',
+    id: 'playwright',
     name: 'Browser',
-    description: 'Drive a real browser: navigate, screenshot, fill forms.',
+    // Was `@modelcontextprotocol/server-puppeteer`, which npm now marks
+    // deprecated ("Package no longer supported"). Playwright's own MCP server
+    // is the maintained successor, ships from the Playwright team, and needs
+    // no credentials — same capability, upstream that is actually alive.
+    description: 'Drive a real browser via Playwright: navigate, screenshot, fill forms.',
     transport: 'stdio',
     command: 'npx',
-    args: ['-y', '@modelcontextprotocol/server-puppeteer'],
+    args: ['-y', '@playwright/mcp@latest'],
     capabilityId: 'research',
     suggestedAutonomy: 'ask-always',
     unlocks: 'Anything that needs a real page rather than an API — including sites with no API.',
+    formerIds: ['puppeteer'],
   },
   {
     id: 'postgres',
     name: 'Postgres',
-    description: 'Query a Postgres database.',
+    // The reference server still runs but npm marks it deprecated; said in the
+    // description because a founder deciding whether to wire production data
+    // into it deserves to know upstream stopped maintaining it.
+    description: 'Query a Postgres database. Upstream reference server is deprecated but still runs.',
     transport: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-postgres', '<CONNECTION_STRING>'],
@@ -290,7 +327,7 @@ export const MCP_PRESETS: readonly McpPreset[] = [
   {
     id: 'slack',
     name: 'Slack',
-    description: 'Read and post in channels you have access to.',
+    description: 'Read and post in channels you have access to. Upstream reference server is deprecated but still runs.',
     transport: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-slack'],
@@ -310,3 +347,60 @@ export const MCP_PRESETS: readonly McpPreset[] = [
     unlocks: 'Your own services, or a hosted provider that speaks MCP.',
   },
 ];
+
+/** The URL a preset ships so the form is not empty. Connecting to it is never intended. */
+const PLACEHOLDER_URL = 'https://example.com/mcp';
+
+const PLACEHOLDER_WORDS: Readonly<Record<string, string>> = {
+  ABSOLUTE_PATH: 'a directory path',
+  CONNECTION_STRING: 'a connection string',
+};
+
+/**
+ * What a configuration still needs before connecting can possibly succeed.
+ *
+ * Presets ship with `<ABSOLUTE_PATH>`-style placeholders in their args, and the
+ * custom HTTP preset ships an example URL. Nothing used to look at those again
+ * after add: the founder could enable the server, probe it, and get a spawn
+ * failure indistinguishable from a broken server. The real problem — "you have
+ * not told it which directory yet" — was never said. Returned phrases are
+ * founder language, shared by the preset badge, the connection card and the
+ * probe refusal, so all three tell the same story.
+ */
+export function configGaps(
+  config: Pick<McpServerConfig, 'transport' | 'args' | 'url'>,
+): string[] {
+  const gaps: string[] = [];
+  if (config.transport === 'stdio') {
+    for (const arg of config.args ?? []) {
+      // matchAll, because one arg can hold several placeholders — a founder's
+      // hand-written `postgresql://<USER>:<PASSWORD>@host` needs both named.
+      for (const match of arg.matchAll(/<([A-Z_]+)>/g)) {
+        const token = match[1];
+        if (token) gaps.push(PLACEHOLDER_WORDS[token] ?? `a value for ${match[0]}`);
+      }
+    }
+  } else if (config.url === PLACEHOLDER_URL) {
+    gaps.push('its real URL');
+  }
+  return gaps;
+}
+
+/**
+ * The one derivation of a connection's displayed status, so the card, the
+ * catalog and the assistant's self-knowledge cannot disagree about it.
+ * Needs-setup outranks any stored probe result: a probe taken before the
+ * placeholder was filled in is describing a configuration that no longer needs
+ * describing.
+ */
+export function connectionStatusFor(
+  server: Pick<McpServerConfig, 'enabled' | 'transport' | 'args' | 'url'>,
+  state: Pick<McpConnectionState, 'status'> | undefined,
+): McpStatus {
+  if (!server.enabled) return 'disabled';
+  if (configGaps(server).length > 0) return 'needs-setup';
+  // A stored needs-setup describes a configuration that has since been fixed;
+  // nothing is known about the fixed one yet, which is what never-connected means.
+  if (state === undefined || state.status === 'needs-setup') return 'never-connected';
+  return state.status;
+}
