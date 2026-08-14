@@ -52,9 +52,9 @@ export default async function OsLayout({ children }: { children: React.ReactNode
       strip={<Strip snapshot={snapshot} />}
       banner={
         isEphemeralDataDir() ? (
-          <p className="shell-banner" role="status">
-            Ephemeral preview — this deployment has no disk. Everything resets on restart and
-            nothing you enter is kept. Run OmniOS on your own machine for real use.
+          <p className="shell-banner">
+            Ephemeral preview — OmniOS cannot keep data here, so it is running from temporary
+            storage. Nothing you enter is kept. Run OmniOS on your own machine for real use.
           </p>
         ) : undefined
       }
