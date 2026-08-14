@@ -13,7 +13,7 @@ import 'server-only';
  * allowed to be wrong.
  */
 
-import type { LlmProvider, LlmToolSchema, Scope, ToolDefinition } from '@/lib/domain';
+import type { LlmMessage, LlmProvider, LlmToolSchema, Scope, ToolDefinition } from '@/lib/domain';
 import { parseMcpToolId } from '@/lib/domain';
 import { scoreTools, toolsForScope } from './tools';
 
@@ -214,8 +214,9 @@ You are called repeatedly. What you plan runs, and you are asked again with the 
 Rules that are not yours to bend:
 - Plan a call only when the founder clearly asked for something to be done. A question about their records is still something to be done: look it up rather than guessing.
 - Reading is free. A tool that only reads changes nothing and needs no permission, so prefer looking over asking the founder to repeat themselves. If you do not know a path, an id or a filename, use a read tool to find it before giving up.
-- Anything that writes, deletes or leaves this machine is different: use only arguments the founder actually stated or that follow trivially, like "tomorrow" as a date. Never invent a title, an amount, a date, a recipient or a name.
-- At most 3 calls per step. When unsure about a write, plan nothing and say so — the founder would rather repeat themselves than undo you. When unsure about a read, just read.`;
+- Facts are never yours to invent: an amount of money, a date something happened, a recipient, an address, a real person or company outside this workspace. Those come from the founder's words or from records you read — a write built on a guessed fact corrupts their books.
+- Choices the founder handed to you are yours to make. "You decide", "draft it", "name it", "set it up", "you run it", "make a plan" delegate the naming and the content: do the work, choose sensible specifics, and let the receipts say what you chose. Meeting a delegation with a questionnaire is refusing the job.
+- At most 3 calls per step. When a write needs a fact you do not have, do the parts that are clear and name the one thing missing — never let one gap park the whole instruction. When unsure about a read, just read.`;
 
 
 export async function detectAct(
@@ -235,6 +236,14 @@ export async function detectAct(
      * the tests keep their old behaviour.
      */
     readonly tools?: readonly ToolDefinition[];
+    /**
+     * The last few turns of this conversation, oldest first. Without them the
+     * planner sees one sentence with no past: the assistant asks "which model —
+     * fixed-price or retainer?", the founder answers "the first one", and the
+     * planner receives three words it cannot possibly act on. The answering
+     * half has carried history for a while; the acting half was the amnesiac.
+     */
+    readonly history?: readonly LlmMessage[];
   },
 ): Promise<ActDecision> {
   const { scope, provider, now, preferCapabilityId } = options;
@@ -299,6 +308,7 @@ export async function detectAct(
       {
         messages: [
           { role: 'system', content: `${ACT_SYSTEM}${connectionLine}` },
+          ...(options.history ?? []),
           { role: 'user', content: `Today is ${now.toISOString().slice(0, 10)}. The founder said: "${prompt.trim()}"` },
         ],
         maxTokens: 600,

@@ -260,7 +260,18 @@ export async function speakToAgent(
   // The agent acts as itself, not as the founder's assistant: its own charter
   // decides what it may reach. Subtractive only — it can never exceed the space.
   const provider = await activeProvider();
-  const loop = await runActLoop(trimmed, { scope, provider, now, agent: specialist });
+  const loop = await runActLoop(trimmed, {
+    scope,
+    provider,
+    now,
+    agent: specialist,
+    // The same recollection the reply gets — the planner must be able to act
+    // on "yes, do that" said to this agent, not just on self-contained orders.
+    history: history.slice(-6).map((entry) => ({
+      role: entry.role === 'founder' ? ('user' as const) : ('assistant' as const),
+      content: entry.text.length > 1200 ? `${entry.text.slice(0, 1200)}…` : entry.text,
+    })),
+  });
   const actLines = describeLoop(loop);
   const activity = loop.steps.map((step) => `- ${step.toolId}: ${step.summary}`).join('\n');
 

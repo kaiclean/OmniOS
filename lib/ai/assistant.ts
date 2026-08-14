@@ -9,7 +9,7 @@
 
 import 'server-only';
 
-import type { AgentRun, AssistantMessage, DelegationPlan, MemoryRecord, SpecialistAgent } from '@/lib/domain';
+import type { AgentRun, AssistantMessage, DelegationPlan, LlmMessage, MemoryRecord, SpecialistAgent } from '@/lib/domain';
 import { agentIdFrom, makeRecordId, parseScopeKey, personalScope, scopeKey, sharedScope } from '@/lib/domain';
 import type { Scope } from '@/lib/domain';
 import { getWorkspace, insertRecords, readScope } from '@/lib/data/store';
@@ -282,6 +282,18 @@ export async function ask(
         ? (parseScopeKey(target.page.spaceKey) ?? null)
         : null;
 
+  // One memory of this conversation, shared by the planner and the answering
+  // voice. Built before either runs: two recollections of the same chat is how
+  // the acting half asked a question the answering half had already answered.
+  // Both messages of the current turn persist at the end of ask(), so this can
+  // never include the prompt it is context for.
+  const channelHistory: LlmMessage[] = (await conversation(target, options.channel))
+    .slice(-6)
+    .map((entry) => ({
+      role: entry.role === 'founder' ? ('user' as const) : ('assistant' as const),
+      content: entry.text.length > 1200 ? `${entry.text.slice(0, 1200)}…` : entry.text,
+    }));
+
   const actLines: string[] = [];
   let loopResult: LoopResult | undefined;
   if (!metaTurn && actScope && actScope.kind !== 'shared') {
@@ -310,6 +322,7 @@ export async function ask(
         scope: actScope,
         provider,
         now,
+        history: channelHistory,
         ...(target.page?.capabilityId ? { preferCapabilityId: target.page.capabilityId } : {}),
       });
       // A question's internal lookups are working, not news. Observed live:
@@ -411,17 +424,6 @@ export async function ask(
   if (!provider.simulated && !commandTurn && !metaTurn) {
     try {
       const workspace = await getWorkspace();
-      // The chat remembers itself: the last few turns of this same conversation
-      // ride along, so "make it shorter" or "and the second one?" means what the
-      // founder thinks it means. Only this channel's turns — a thread never
-      // leaks into the main conversation, capped and trimmed so history can
-      // never crowd out the analysis.
-      const history = (await conversation(target, options.channel))
-        .slice(-6)
-        .map((entry) => ({
-          role: entry.role === 'founder' ? ('user' as const) : ('assistant' as const),
-          content: entry.text.length > 1200 ? `${entry.text.slice(0, 1200)}…` : entry.text,
-        }));
       const response = await provider.complete({
         messages: [
           {
@@ -454,7 +456,7 @@ export async function ask(
               }),
             ),
           },
-          ...history,
+          ...channelHistory,
           {
             role: 'user',
             content: `The founder asked: "${spoken}"\n\nAnalysis computed from their records:\n\n${composition.body}${loopFindings}\n\nWrite the reply.`,

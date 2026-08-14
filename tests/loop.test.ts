@@ -148,7 +148,8 @@ describe('the loop is bounded', () => {
     });
 
     expect(result.haltedBecause).toBe('round-limit');
-    expect(result.steps.length).toBeLessThanOrEqual(8);
+    // Twelve is the structural ceiling: four rounds of at most three calls.
+    expect(result.steps.length).toBeLessThanOrEqual(12);
     expect(loop.describeLoop(result).join(' ')).toContain('rather than keep going unattended');
   }, 60_000);
 });
