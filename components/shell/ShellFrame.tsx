@@ -14,6 +14,12 @@ export interface ShellFrameProps {
   rail: React.ReactNode;
   strip: React.ReactNode;
   /**
+   * A truth the whole shell must carry — today, "this deployment keeps
+   * nothing". Rendered above the strip on every page precisely because it is
+   * the kind of fact a founder must never have to discover by losing data.
+   */
+  banner?: React.ReactNode;
+  /**
    * The copilot arrives as *data*, not as an element.
    *
    * Passing a Client Component element from a Server Component into another
@@ -28,7 +34,7 @@ export interface ShellFrameProps {
   children: React.ReactNode;
 }
 
-export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFrameProps) {
+export function ShellFrame({ rail, strip, banner, copilot, commands, children }: ShellFrameProps) {
   const pathname = usePathname();
   // Derived on the client so the room re-tints the instant a link is clicked,
   // before any server response arrives. One shared derivation with the Copilot
@@ -129,6 +135,7 @@ export function ShellFrame({ rail, strip, copilot, commands, children }: ShellFr
       {rail}
 
       <div className="os-main">
+        {banner}
         <div className="strip">
           <button
             type="button"

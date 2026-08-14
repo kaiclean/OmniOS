@@ -1,5 +1,6 @@
 import { CAPABILITIES, capabilitiesFor } from '@/lib/capabilities/registry';
 import { loadSpaces, overviewSnapshot } from '@/lib/data/aggregate';
+import { isEphemeralDataDir } from '@/lib/data/data-dir';
 import { getWorkspace } from '@/lib/data/store';
 import { conversation } from '@/lib/ai/assistant';
 import { activeProvider } from '@/lib/ai/providers';
@@ -49,6 +50,14 @@ export default async function OsLayout({ children }: { children: React.ReactNode
         />
       }
       strip={<Strip snapshot={snapshot} />}
+      banner={
+        isEphemeralDataDir() ? (
+          <p className="shell-banner" role="status">
+            Ephemeral preview — this deployment has no disk. Everything resets on restart and
+            nothing you enter is kept. Run OmniOS on your own machine for real use.
+          </p>
+        ) : undefined
+      }
       copilot={{
         assistantName: workspace.settings.assistantName,
         providerLabel: provider.label,

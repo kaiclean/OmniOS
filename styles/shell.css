@@ -185,6 +185,21 @@
   min-height: 0;
 }
 
+/* One sentence of chrome above the strip, shown only when the deployment
+   cannot keep data (serverless preview). No existing class fits: the strip is
+   fixed-height furniture and callouts carry page margins — this must span the
+   canvas edge-to-edge and cost almost no height. Muted text on the plain
+   surface, no accent: a fact, not an alarm. */
+.shell-banner {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: var(--s-2) var(--s-5);
+  font-size: var(--fs-small);
+  color: var(--text-2);
+  border-bottom: 1px solid var(--hairline);
+  background: var(--surface-2);
+}
+
 .strip {
   position: relative;
   display: flex;
