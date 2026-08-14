@@ -12,18 +12,14 @@
 
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import type { WorkspaceStore } from '../store-port';
 import type { ScopeData, WorkspaceRoot } from '../schema';
 import { emptyScopeData, normaliseRoot, normaliseScopeData } from '../schema';
+import { dataDir } from '../data-dir';
 import type { Scope } from '@/lib/domain';
 import { scopeKey } from '@/lib/domain';
-
-function dataDir(): string {
-  const configured = process.env.OMNIOS_DATA_DIR?.trim();
-  return configured ? resolve(configured) : resolve(process.cwd(), '.omnios-data');
-}
 
 /**
  * Scope keys contain user-supplied company ids. Hashing the key keeps a hostile

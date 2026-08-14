@@ -28,19 +28,15 @@ import {
   timingSafeEqual,
 } from 'node:crypto';
 import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import type { EncryptedSecret, SecretKind, SecretMeta, SecretVaultFile } from '@/lib/domain';
 import { isValidSecretName, referencedSecretNames } from '@/lib/domain';
+import { dataDir } from '@/lib/data/data-dir';
 
 const ALGORITHM = 'aes-256-gcm';
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
-
-function dataDir(): string {
-  const configured = process.env.OMNIOS_DATA_DIR?.trim();
-  return configured ? resolve(configured) : resolve(process.cwd(), '.omnios-data');
-}
 
 const vaultPath = (): string => join(dataDir(), 'secrets.json');
 const keyPath = (): string => join(dataDir(), '.secret-key');
