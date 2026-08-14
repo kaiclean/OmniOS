@@ -143,7 +143,7 @@ export const SPECIALISTS: readonly SpecialistAgent[] = [
     role: 'Pipeline and conversion',
     charter: 'Moves conversations forward, and closes the ones that are ready.',
     capabilityIds: ['sales'],
-    matches: ['sales', 'pipeline', 'lead', 'deal', 'client', 'customer', 'proposal', 'quote', 'crm'],
+    matches: ['sales', 'pipeline', 'lead', 'deal', 'client', 'customer', 'proposal', 'quote', 'quoting', 'quotes', 'pricing', 'crm'],
     allowedScopeKinds: ['company'],
     wouldDo: [
       'Rank the pipeline by what is actually closeable',
@@ -332,7 +332,7 @@ export const SPECIALISTS: readonly SpecialistAgent[] = [
     role: 'Process and throughput',
     charter: 'Turns a thing that worked once into a thing that works every time.',
     capabilityIds: ['operations', 'hr'],
-    matches: ['process', 'operations', 'sop', 'workflow', 'bottleneck', 'throughput', 'handover'],
+    matches: ['process', 'operations', 'sop', 'workflow', 'bottleneck', 'throughput', 'handover', 'hiring', 'hire', 'recruit', 'onboarding', 'headcount'],
     allowedScopeKinds: ['company', 'personal'],
     wouldDo: ['Write the SOP from what actually happened', 'Find where work queues up'],
   },

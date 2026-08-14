@@ -9,14 +9,13 @@ import {
   connectionStatusFor,
   requiresApproval,
 } from '@/lib/domain';
-import { formatRelative } from '@/lib/format';
 import {
   probeMcpServer,
   removeMcpServer,
   setMcpServerEnabled,
   setMcpToolEnabled,
 } from '@/lib/actions/mcp';
-import { Badge, Note } from '@/components/ui/primitives';
+import { Badge, Note, RelativeTime } from '@/components/ui/primitives';
 import { ServerForm } from './ServerForm';
 
 const RISK_TONE: Readonly<Record<RiskTier, 'accent' | 'outline' | 'warn'>> = {
@@ -129,7 +128,7 @@ export function ConnectionCard({
               <span className="hint">
                 {state?.serverName ?? server.id}
                 {state?.serverVersion ? ` ${state.serverVersion}` : ''} · checked{' '}
-                {formatRelative(state?.checkedAt)}
+                <RelativeTime at={state?.checkedAt} />
                 {state?.latencyMs === undefined ? '' : ` · ${state.latencyMs}ms`}
               </span>
               <span className="hint">
@@ -231,7 +230,7 @@ export function ConnectionCard({
           <div className="spread">
             <span className="hint">
               {server.lastConnectedAt
-                ? `Last reached ${formatRelative(server.lastConnectedAt)}.`
+                ? <>Last reached <RelativeTime at={server.lastConnectedAt} />.</>
                 : 'Not reached yet.'}
             </span>
             <button className="btn btn--ghost" type="button" onClick={() => setConfirmingRemoval(true)}>
