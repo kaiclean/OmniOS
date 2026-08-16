@@ -121,7 +121,7 @@ tests/               logic-layer tests (vitest, node environment)
 
 | Thing | File |
 | --- | --- |
-| Persistence swap point | `lib/data/store.ts` (one `adapter` line) |
+| Persistence swap point | `lib/data/store.ts` (one `adapter` pick; `OMNIOS_STORE=sqlite` selects the SQLite adapter) |
 | Where the data dir is resolved, and whether it is ephemeral | `lib/data/data-dir.ts` |
 | Capability definitions | `lib/capabilities/registry.ts` |
 | Specialist definitions (routing is declarative) | `lib/ai/specialists.ts` |

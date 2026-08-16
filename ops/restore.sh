@@ -18,8 +18,8 @@ DATA_DIR="${OMNIOS_DATA_DIR:-$REPO/.omnios-data}"
 PARENT="$(dirname "$DATA_DIR")"
 BASE="$(basename "$DATA_DIR")"
 
-if ! tar -tzf "$ARCHIVE" | grep -q "^$BASE/workspace\.json$"; then
-  echo "✗ $ARCHIVE does not contain $BASE/workspace.json — not an OmniOS backup for this data dir"
+if ! tar -tzf "$ARCHIVE" | grep -qE "^$BASE/(workspace\.json|omnios\.sqlite)$"; then
+  echo "✗ $ARCHIVE does not contain $BASE/workspace.json or $BASE/omnios.sqlite — not an OmniOS backup for this data dir"
   exit 1
 fi
 

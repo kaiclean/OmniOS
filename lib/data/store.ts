@@ -19,7 +19,8 @@ import type { WorkspaceStore } from './store-port';
 import type { CollectionName, ScopeData, WorkspaceRoot } from './schema';
 import { emptyScopeData, normaliseRoot } from './schema';
 import type { Scope } from '@/lib/domain';
-import { scopeKey } from '@/lib/domain';
+import { companyScope, personalScope, scopeKey, sharedScope } from '@/lib/domain';
+import { capabilityIds } from '@/lib/capabilities/registry';
 import { buildInitialWorkspace } from './seed';
 
 /**
@@ -38,6 +39,32 @@ export function storeInfo(): { id: string; label: string; location: string } {
 /** Guards against two concurrent first-run seeds racing each other. */
 let seeding: Promise<WorkspaceRoot> | null = null;
 
+/**
+ * A founder who sets `OMNIOS_STORE=sqlite` means "same workspace, database
+ * backend" — not "start over". So before seeding a fresh workspace, a non-
+ * filesystem adapter imports the existing JSON one if it is there: the root,
+ * personal life, every company the root names, and every shared capability.
+ * The JSON files are read, never touched, so flipping the variable back is
+ * always safe. Returns `null` when there is nothing to import.
+ */
+async function importFromFileSystem(): Promise<WorkspaceRoot | null> {
+  if (adapter.id === fileSystemStore.id) return null;
+  const legacy = await fileSystemStore.readRoot();
+  if (!legacy) return null;
+  const root = normaliseRoot(legacy);
+  const scopes: Scope[] = [
+    personalScope(),
+    ...root.companies.map((company) => companyScope(company.id)),
+    ...capabilityIds().map(sharedScope),
+  ];
+  for (const scope of scopes) {
+    const data = await fileSystemStore.readScope(scope);
+    if (data) await adapter.writeScope(scope, data);
+  }
+  await adapter.writeRoot(root);
+  return root;
+}
+
 export async function getWorkspace(): Promise<WorkspaceRoot> {
   const existing = await adapter.readRoot();
   if (existing) return normaliseRoot(existing);
@@ -47,6 +74,8 @@ export async function getWorkspace(): Promise<WorkspaceRoot> {
       // Normalise the double-check read too: a root written by an older build
       // arrives raw, and returning it unwrapped skipped every field default.
       if (again) return normaliseRoot(again);
+      const imported = await importFromFileSystem();
+      if (imported) return imported;
       const { root, scopes } = buildInitialWorkspace();
       for (const [scope, data] of scopes) {
         await adapter.writeScope(scope, data);

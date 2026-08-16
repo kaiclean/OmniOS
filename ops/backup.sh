@@ -19,7 +19,9 @@ DATA_DIR="${OMNIOS_DATA_DIR:-$REPO/.omnios-data}"
 BACKUP_DIR="${OMNIOS_BACKUP_DIR:-$HOME/.omnios/backups}"
 KEEP="${OMNIOS_BACKUP_KEEP:-14}"
 
-if [[ ! -f "$DATA_DIR/workspace.json" ]]; then
+# The store writes either plain JSON (workspace.json) or one SQLite file
+# (omnios.sqlite) depending on OMNIOS_STORE; a backup covers both the same way.
+if [[ ! -f "$DATA_DIR/workspace.json" && ! -f "$DATA_DIR/omnios.sqlite" ]]; then
   log "SKIP nothing to back up yet at $DATA_DIR"
   exit 0
 fi
@@ -43,9 +45,9 @@ if ! snapshot; then
 fi
 chmod 600 "$ARCHIVE"
 
-if ! tar -tzf "$ARCHIVE" | grep -q 'workspace\.json$'; then
+if ! tar -tzf "$ARCHIVE" | grep -qE '(workspace\.json|omnios\.sqlite)$'; then
   rm -f "$ARCHIVE"
-  log "FAIL archive verification — workspace.json missing from listing"
+  log "FAIL archive verification — neither workspace.json nor omnios.sqlite in listing"
   exit 1
 fi
 
