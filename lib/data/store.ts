@@ -14,6 +14,7 @@
 import 'server-only';
 
 import { fileSystemStore } from './adapters/fs-store';
+import { sqliteStore } from './adapters/sqlite-store';
 import type { WorkspaceStore } from './store-port';
 import type { CollectionName, ScopeData, WorkspaceRoot } from './schema';
 import { emptyScopeData, normaliseRoot } from './schema';
@@ -22,10 +23,13 @@ import { scopeKey } from '@/lib/domain';
 import { buildInitialWorkspace } from './seed';
 
 /**
- * The swap point. Replace this with a Postgres/Supabase/SQLite adapter and the
- * entire application above keeps working unchanged.
+ * The swap point. `OMNIOS_STORE=sqlite` keeps the workspace in one SQLite file;
+ * anything else keeps the plain-JSON filesystem store. The default stays
+ * filesystem deliberately — an env var must never silently move an existing
+ * workspace out from under a founder.
  */
-const adapter: WorkspaceStore = fileSystemStore;
+const adapter: WorkspaceStore =
+  process.env.OMNIOS_STORE?.trim().toLowerCase() === 'sqlite' ? sqliteStore : fileSystemStore;
 
 export function storeInfo(): { id: string; label: string; location: string } {
   return { id: adapter.id, label: adapter.label, location: adapter.describeLocation() };

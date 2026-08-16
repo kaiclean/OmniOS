@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 
 import { activeProvider, providerStatus } from '@/lib/ai/providers';
 import { CAPABILITIES, capabilityIds } from '@/lib/capabilities/registry';
@@ -87,8 +88,9 @@ export default async function SettingsPage() {
                 <span className="hint">adapter · {store.id}</span>
               </div>
               <p className="prose">
-                Plain JSON files, one per scope, written atomically. You can read, back up, sync or
-                delete them with a file manager; nothing here is in a database you cannot open.
+                {store.id === 'sqlite'
+                  ? 'One SQLite file holding every scope as its own row, written through the same store facade as everything else. Open it with any SQLite tool — nothing here is opaque.'
+                  : 'Plain JSON files, one per scope, written atomically. You can read, back up, sync or delete them with a file manager; nothing here is in a database you cannot open.'}
               </p>
               <div className="stack" style={{ gap: 'var(--s-1)' }}>
                 <span className="eyebrow">Location</span>
@@ -98,8 +100,12 @@ export default async function SettingsPage() {
               </div>
               <span className="hint">
                 Set <span className="mono">OMNIOS_DATA_DIR</span> before starting the app to keep the
-                workspace somewhere else.
+                workspace somewhere else, and <span className="mono">OMNIOS_STORE=sqlite</span> to keep
+                it in a SQLite database instead of JSON files.
               </span>
+              <Link className="hint" href="/settings/data">
+                Edit records directly →
+              </Link>
             </div>
           </Panel>
 
