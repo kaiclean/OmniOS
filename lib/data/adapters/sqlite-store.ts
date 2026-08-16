@@ -8,10 +8,12 @@
  * and `normaliseScopeData`/`normaliseRoot` keep doing the schema-migration work
  * they already do for the filesystem adapter.
  *
- * Every call runs synchronously inside SQLite, so a read-modify-write in
- * `mutateRoot`/`mutateScope` cannot interleave with another writer on this
- * process — the same serialisation guarantee the filesystem adapter builds with
- * write queues falls out of the engine here.
+ * Every call runs synchronously inside SQLite on one connection, and the
+ * read-modify-write in `mutateRoot`/`mutateScope` is wrapped in an explicit
+ * `BEGIN IMMEDIATE … COMMIT` with no awaits between read and write, so two
+ * concurrent callers on this process cannot read one snapshot and have the
+ * second write silently discard the first — the same serialisation guarantee
+ * the filesystem adapter builds with write queues.
  *
  * Do not import this directly — go through `lib/data/store.ts`, which selects an
  * adapter, and set `OMNIOS_STORE=sqlite` to choose this one.
@@ -63,6 +65,29 @@ function readRow(sql: string, ...params: string[]): unknown | null {
   }
 }
 
+const UPSERT_ROOT =
+  'INSERT INTO root (id, json) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json';
+const UPSERT_SCOPE =
+  'INSERT INTO scopes (key, json) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET json = excluded.json';
+
+/**
+ * Runs `work` inside an immediate transaction. `work` must stay synchronous:
+ * an await between the read and the write would reopen exactly the lost-update
+ * race this wrapper exists to close.
+ */
+function inTransaction<T>(work: () => T): T {
+  const database = db();
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    const result = work();
+    database.exec('COMMIT');
+    return result;
+  } catch (error) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 export const sqliteStore: WorkspaceStore = {
   id: 'sqlite',
   label: 'SQLite database',
@@ -72,18 +97,16 @@ export const sqliteStore: WorkspaceStore = {
   },
 
   async writeRoot(root) {
-    db()
-      .prepare(
-        'INSERT INTO root (id, json) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET json = excluded.json',
-      )
-      .run(JSON.stringify(root));
+    db().prepare(UPSERT_ROOT).run(JSON.stringify(root));
   },
 
   async mutateRoot(transform) {
-    const raw = readRow('SELECT json FROM root WHERE id = 1') as WorkspaceRoot | null;
-    const next = transform(raw === null ? null : normaliseRoot(raw));
-    await this.writeRoot(next);
-    return next;
+    return inTransaction(() => {
+      const raw = readRow('SELECT json FROM root WHERE id = 1') as WorkspaceRoot | null;
+      const next = transform(raw === null ? null : normaliseRoot(raw));
+      db().prepare(UPSERT_ROOT).run(JSON.stringify(next));
+      return next;
+    });
   },
 
   async readScope(scope) {
@@ -92,19 +115,17 @@ export const sqliteStore: WorkspaceStore = {
   },
 
   async writeScope(scope, data: ScopeData) {
-    db()
-      .prepare(
-        'INSERT INTO scopes (key, json) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET json = excluded.json',
-      )
-      .run(scopeKey(scope), JSON.stringify(data));
+    db().prepare(UPSERT_SCOPE).run(scopeKey(scope), JSON.stringify(data));
   },
 
   async mutateScope(scope, transform) {
-    const raw = readRow('SELECT json FROM scopes WHERE key = ?', scopeKey(scope));
-    const current = raw === null ? emptyScopeData() : normaliseScopeData(raw);
-    const next = transform(current);
-    await this.writeScope(scope, next);
-    return next;
+    return inTransaction(() => {
+      const raw = readRow('SELECT json FROM scopes WHERE key = ?', scopeKey(scope));
+      const current = raw === null ? emptyScopeData() : normaliseScopeData(raw);
+      const next = transform(current);
+      db().prepare(UPSERT_SCOPE).run(scopeKey(scope), JSON.stringify(next));
+      return next;
+    });
   },
 
   async dropScope(scope) {
