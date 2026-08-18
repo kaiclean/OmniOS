@@ -1,0 +1,38 @@
+# OmniOS development overlay for DeepSeek Harness (dsh).
+#
+# Apply with:  npx @deepseek-ai/dsh web --patch "$PWD/ops/dsh/cordis.patch.yml"
+#
+# A dsh patch targets a config row by id and replaces its whole config, or
+# inserts new rows; layers apply after the profile's bundles, so everything
+# here stays overridable by a founder's home-level patch. See
+# docs/architecture.md in deepseek-ai/deepseek-harness ("Profiles and bundles").
+#
+# dsh is a developer preview and row ids may change between releases — this
+# file is a template pinned to the rows as of @deepseek-ai/dsh 0.1.x. If a row
+# id here stops matching, run `dsh --profile web --dump-config` and re-target.
+#
+# Intent, independent of exact row ids:
+#   - filesystem seam confined to this repository checkout;
+#   - sandbox seam kept ON so spawned processes are confined;
+#   - `npm run verify` named as the sanctioned verification command;
+#   - persona pointed at CLAUDE.md, the operating contract for any agent
+#     working in this repo, instead of duplicating it here.
+
+- id: fs-local
+  config:
+    # Replace with the absolute path of this checkout. dsh resolves relative
+    # paths against its own home, not the repo.
+    root: /ABSOLUTE/PATH/TO/OmniOS
+
+- id: sandbox
+  config:
+    enabled: true
+
+- id: system-prompt-persona
+  config:
+    # CLAUDE.md is the truth for invariants, verification and style. The one
+    # command an agent needs to know by name is repeated because it gates done:
+    instructions: |
+      Read CLAUDE.md at the repository root before changing anything.
+      Verification is `npm run verify` (typecheck -> lint -> tests -> build);
+      never report something as working without having run it.

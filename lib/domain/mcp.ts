@@ -337,6 +337,24 @@ export const MCP_PRESETS: readonly McpPreset[] = [
     unlocks: 'Posting updates where your team already is.',
   },
   {
+    id: 'deepseek-harness',
+    name: 'DeepSeek Harness',
+    // dsh ships an MCP client but no MCP server, so OmniOS reaches it through
+    // the thin wrapper in this repo (ops/dsh/dsh-mcp-server.mjs). Running a
+    // task is arbitrary code execution by an autonomous agent on this machine,
+    // which is why the suggested autonomy is ask-always and why the wrapper's
+    // run tool is named so the risk deriver reads it as mutating.
+    description:
+      'Delegate long-running agent tasks to DeepSeek Harness (dsh). Point it at ops/dsh/dsh-mcp-server.mjs in this repository — see ops/dsh/README.md.',
+    transport: 'stdio',
+    command: 'node',
+    args: ['<DSH_WRAPPER_PATH>'],
+    capabilityId: 'development',
+    suggestedAutonomy: 'ask-always',
+    unlocks:
+      'Approved multi-step coding and research work executed by a separate, auditable agent harness.',
+  },
+  {
     id: 'custom-http',
     name: 'Custom HTTP server',
     description: 'Any MCP server reachable over HTTP.',
@@ -354,6 +372,7 @@ const PLACEHOLDER_URL = 'https://example.com/mcp';
 const PLACEHOLDER_WORDS: Readonly<Record<string, string>> = {
   ABSOLUTE_PATH: 'a directory path',
   CONNECTION_STRING: 'a connection string',
+  DSH_WRAPPER_PATH: 'the absolute path to ops/dsh/dsh-mcp-server.mjs',
 };
 
 /**
