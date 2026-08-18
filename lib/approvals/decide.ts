@@ -80,20 +80,28 @@ async function learnDecision(
   at: string,
   now: Date,
 ): Promise<void> {
-  const tool = await resolveTool(call.toolId);
-  await learnFromDecision(
-    {
-      scope,
-      toolId: call.toolId,
-      toolLabel: tool?.label ?? call.toolId,
-      capabilityId: tool?.capabilityId ?? 'executive',
-      preview: call.preview,
-      decision,
-      at,
-    },
-    call.id,
-    now,
-  );
+  // By the time this runs the decision and its outcome are durably on the
+  // record. Learning is a secondary effect of that record, so a failure here
+  // is logged and swallowed: it must never turn an approval that ran — or a
+  // rejection that stuck — into an error in the founder's hands.
+  try {
+    const tool = await resolveTool(call.toolId);
+    await learnFromDecision(
+      {
+        scope,
+        toolId: call.toolId,
+        toolLabel: tool?.label ?? call.toolId,
+        capabilityId: tool?.capabilityId ?? 'executive',
+        preview: call.preview,
+        decision,
+        at,
+      },
+      call.id,
+      now,
+    );
+  } catch (error) {
+    console.error(`Could not learn from the decision on ${call.id}:`, error);
+  }
 }
 
 export async function approveToolCallAs(
