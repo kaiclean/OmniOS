@@ -89,7 +89,7 @@ interface Candidate {
  * timestamp. Nothing starts near certainty: a first sighting should be visible
  * but weak, and earn the rest.
  */
-const OPENING_CONFIDENCE: Record<ObservationKind, number> = {
+export const OPENING_CONFIDENCE: Record<ObservationKind, number> = {
   style: 0.28,
   pattern: 0.3,
   preference: 0.32,

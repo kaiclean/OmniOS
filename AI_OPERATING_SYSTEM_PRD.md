@@ -403,10 +403,14 @@ them. Every mutation is a Server Action.
 
 **Persistence:** JSON under `.omnios-data/`, one file per scope, atomic writes,
 per-file write serialisation. Real, inspectable, backup-able, no service to run.
+`OMNIOS_STORE=sqlite` swaps in the SQLite adapter (one database file, one row per
+scope, built on `node:sqlite` so still no service and no native build); an
+existing JSON workspace is imported on first run and left in place.
 
 **The swap seam** is one interface, `WorkspaceStore` (`lib/data/store-port.ts`).
-Postgres, Supabase or SQLite means writing one object and changing one line in
-`lib/data/store.ts`. No page, component, action or agent changes.
+Postgres or Supabase means writing one object and changing the adapter pick in
+`lib/data/store.ts`. No page, component, action or agent changes — the SQLite
+adapter proves the seam.
 
 ---
 

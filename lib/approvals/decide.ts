@@ -25,7 +25,9 @@ import 'server-only';
 
 import type { Scope, ToolCall, ToolOutcome } from '@/lib/domain';
 import { mutateScope, readCollection, updateRecord } from '@/lib/data/store';
-import { runTool } from '@/lib/ai/tools/executors';
+import { resolveTool, runTool } from '@/lib/ai/tools/executors';
+import type { ToolDecision } from '@/lib/learning/decisions';
+import { learnFromDecision } from '@/lib/learning/engine';
 import { resolveSecrets } from '@/lib/secrets/vault';
 
 /** The decider when the founder answered in the app itself. */
@@ -64,6 +66,44 @@ async function claimPendingCall(
   return claimed;
 }
 
+/**
+ * A decided call is also the most explicit signal the learning layer ever gets
+ * — a yes or no on a preview of exactly what would happen. Folding it in here,
+ * after the decision is durably on the record, means every entry point that
+ * records a decision (the app, Telegram) teaches the system without knowing it
+ * does. See `lib/learning/decisions.ts` for what is concluded and why per tool.
+ */
+async function learnDecision(
+  scope: Scope,
+  call: ToolCall,
+  decision: ToolDecision['decision'],
+  at: string,
+  now: Date,
+): Promise<void> {
+  // By the time this runs the decision and its outcome are durably on the
+  // record. Learning is a secondary effect of that record, so a failure here
+  // is logged and swallowed: it must never turn an approval that ran — or a
+  // rejection that stuck — into an error in the founder's hands.
+  try {
+    const tool = await resolveTool(call.toolId);
+    await learnFromDecision(
+      {
+        scope,
+        toolId: call.toolId,
+        toolLabel: tool?.label ?? call.toolId,
+        capabilityId: tool?.capabilityId ?? 'executive',
+        preview: call.preview,
+        decision,
+        at,
+      },
+      call.id,
+      now,
+    );
+  } catch (error) {
+    console.error(`Could not learn from the decision on ${call.id}:`, error);
+  }
+}
+
 export async function approveToolCallAs(
   scope: Scope,
   toolCallId: string,
@@ -94,6 +134,10 @@ export async function approveToolCallAs(
     ...(outcome.error ? { error: outcome.error } : {}),
   });
 
+  // After the run's result is on the record: the approval was real whether or
+  // not the run then succeeded, and that is what the belief is about.
+  await learnDecision(scope, call, 'approved', decidedAt, now);
+
   return outcome;
 }
 
@@ -105,14 +149,18 @@ export async function rejectToolCallAs(
   // Same atomic claim as approve: a reject only succeeds if it is the one that
   // moved the call out of `awaiting-approval`. Racing an approval, at most one
   // wins, so the UI never says "Nothing ran" over a call that already ran.
+  const now = new Date();
+  const decidedAt = now.toISOString();
   const call = await claimPendingCall(scope, toolCallId, {
     status: 'rejected',
-    decidedAt: new Date().toISOString(),
+    decidedAt,
     decidedBy,
     // Kept, not deleted: a rejected proposal is evidence about what the system
-    // tried to do. The timeline projects it, decision and all — and a learning
-    // pass that wants to stop suggesting rejected things would read it here.
+    // tried to do. The timeline projects it, decision and all — and the
+    // learning pass below reads it, so repeated rejections become a belief the
+    // founder can see, confirm or retire.
     result: 'Rejected. Nothing ran.',
   });
+  if (call) await learnDecision(scope, call, 'rejected', decidedAt, now);
   return call !== null;
 }

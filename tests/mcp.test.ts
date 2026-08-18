@@ -406,7 +406,9 @@ describe('preset upstreams', () => {
 
 describe('preset commands are installable', () => {
   it('runs each stdio preset through a launcher the founder can be told to install', () => {
-    const launchers = new Set(['npx', 'uvx', 'docker']);
+    // `node` is the one launcher guaranteed present: OmniOS itself runs on it.
+    // It is only for servers that live inside this repo (the dsh wrapper).
+    const launchers = new Set(['npx', 'uvx', 'docker', 'node']);
     for (const preset of MCP_PRESETS) {
       if (preset.transport !== 'stdio') continue;
       expect(launchers, preset.id).toContain(preset.command);
@@ -417,6 +419,12 @@ describe('preset commands are installable', () => {
   it('names a package on the right registry for its launcher', () => {
     for (const preset of MCP_PRESETS) {
       if (preset.transport !== 'stdio') continue;
+      if (preset.command === 'node') {
+        // Repo-local server: no registry package to name, but the args must
+        // carry the path placeholder so configGaps reports it as needs-setup.
+        expect(preset.args?.some((arg) => /^<[A-Z_]+>$/.test(arg)), preset.id).toBe(true);
+        continue;
+      }
       const pkg = (preset.args ?? []).find((arg) => !arg.startsWith('-') && !arg.startsWith('<'));
       expect(pkg, `${preset.id} names no package`).toBeTruthy();
       // npm packages are scoped or bare names; uvx packages are PyPI names. What

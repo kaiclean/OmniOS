@@ -134,6 +134,11 @@ is silent.
 product exists) and Postgres/Supabase (a service to run and a network hop for a
 single local user). JSON on disk is real persistence a founder can read, back up
 and delete with a file manager, and the swap seam is one interface.
+*Revisited:* Node 22 ships `node:sqlite`, which removed the native-build cost, so
+a SQLite adapter now exists behind the same port — opt-in via `OMNIOS_STORE=sqlite`,
+one JSON row per scope so isolation stays physical, with a one-time import of an
+existing JSON workspace. The default remains filesystem JSON: an env var must
+never silently move a founder's workspace.
 
 ### D5 — Local grounding first, model second
 The assistant always computes a real analysis from real records. With no API key

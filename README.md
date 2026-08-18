@@ -46,7 +46,11 @@ npm run verify     # typecheck + lint + tests + production build
 
 Your workspace lives in `.omnios-data/` as plain JSON, one file per scope. It is
 git-ignored. Point `OMNIOS_DATA_DIR` at a synced folder to carry it between
-machines. See `.env.example` for every seam an integration can plug into.
+machines, or set `OMNIOS_STORE=sqlite` to keep the same workspace in a single
+SQLite file instead — an existing JSON workspace is imported automatically the
+first time, and the JSON files are left in place so you can switch back. Every
+record is also editable directly at Settings → Data editor. See `.env.example`
+for every seam an integration can plug into.
 
 ---
 

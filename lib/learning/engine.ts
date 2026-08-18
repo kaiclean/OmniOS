@@ -21,6 +21,8 @@ import { parseScopeKey } from '@/lib/domain';
 import { mutateScope } from '@/lib/data/store';
 import type { Interaction } from './observe';
 import { observe } from './observe';
+import type { ToolDecision } from './decisions';
+import { observeDecision } from './decisions';
 import {
   fadedObservations,
   mergeObservations,
@@ -29,7 +31,7 @@ import {
   strengthOf,
 } from './reinforce';
 import type { ScoreInput } from './reinforce';
-import { appendEvolution, decayedEvent, learnedEvent, reinforcedEvent } from './evolution';
+import { appendEvolution, decayedEvent, learnedEvent, reinforcedEvent, toolApprovedEvent, toolRejectedEvent } from './evolution';
 import { markHintApplied } from './routing';
 
 export interface LearnInput {
@@ -101,6 +103,44 @@ export async function learnFromInteraction(input: LearnInput): Promise<LearnSumm
   const memoryReinforced = await reinforceUsedMemory(input.used ?? [], now, at);
 
   return { learned, reinforced, faded, memoryReinforced };
+}
+
+/**
+ * Fold one gate decision into what the scope knows.
+ *
+ * Same shape as `learnFromInteraction`: one read-modify-write, so the belief and
+ * the evolution entries explaining it land together or not at all. The
+ * `tool-approved`/`tool-rejected` event is keyed by the call id, so replaying a
+ * decision cannot write its history twice.
+ */
+export async function learnFromDecision(
+  decision: ToolDecision,
+  toolCallId: string,
+  now: Date,
+): Promise<void> {
+  const at = decision.at;
+  const excerpt = decision.preview.trim().replace(/\s+/g, ' ').slice(0, 120);
+
+  await mutateScope(decision.scope, (data) => {
+    const merge = mergeObservations(data.observations, [observeDecision(decision)], now);
+    const event = decision.decision === 'approved' ? toolApprovedEvent : toolRejectedEvent;
+
+    return {
+      ...data,
+      observations: [...merge.observations],
+      evolution: appendEvolution(data.evolution, [
+        event({
+          scope: decision.scope,
+          at,
+          summary: `${decision.decision === 'approved' ? 'Approved' : 'Rejected'} by you: ${excerpt}`,
+          capabilityId: decision.capabilityId,
+          key: `decision:${toolCallId}`,
+        }),
+        ...merge.learned.map((observation) => learnedEvent(observation, at)),
+        ...merge.reinforced.map((entry) => reinforcedEvent(entry.before, entry.after, at)),
+      ]),
+    };
+  });
 }
 
 /**
