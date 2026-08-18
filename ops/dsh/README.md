@@ -95,6 +95,11 @@ Recurring, well-understood tasks can be pre-approved with a `PermissionGrant`
 exactly like any other MCP tool — exact (server, tool, scope) triple, expiring,
 revocable. Nothing about grants widens for dsh.
 
+Every approve or reject of a wrapper call also feeds the learning layer
+(`lib/learning/decisions.ts`): repeated rejections of `run_task` become a
+visible, strengthening belief in the brain rather than a pattern nothing reads,
+so delegated outcomes shape what gets proposed next.
+
 ## 3. OmniOS records for dsh agents (the reverse direction)
 
 `omnios-mcp-server.sh` starts a **read-only** MCP server over the OmniOS store
