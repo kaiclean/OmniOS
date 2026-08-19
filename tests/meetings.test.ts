@@ -57,7 +57,7 @@ describe('the meeting room', () => {
  * chief of staff alone when nothing matches. That fallback is correct — better
  * one honest chair than five specialists guessing — but it fired on ordinary
  * founder vocabulary: "quoting" (because `sales` declared `quote`, and
- * `indexOf` is a substring test, not a stem) and "hiring" (which no specialist
+ * `includes` is a substring test, not a stem) and "hiring" (which no specialist
  * in the roster declared at all, despite `operator` owning the hr capability).
  *
  * The fix is data, per CLAUDE.md: a specialist is a registry entry, not a branch.

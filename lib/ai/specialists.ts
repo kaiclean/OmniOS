@@ -143,7 +143,7 @@ export const SPECIALISTS: readonly SpecialistAgent[] = [
     role: 'Pipeline and conversion',
     charter: 'Moves conversations forward, and closes the ones that are ready.',
     capabilityIds: ['sales'],
-    matches: ['sales', 'pipeline', 'lead', 'deal', 'client', 'customer', 'proposal', 'quote', 'quoting', 'quotes', 'pricing', 'crm'],
+    matches: ['sales', 'pipeline', 'lead', 'deal', 'client', 'customer', 'proposal', 'quote', 'quoting', 'pricing', 'crm'],
     allowedScopeKinds: ['company'],
     wouldDo: [
       'Rank the pipeline by what is actually closeable',
