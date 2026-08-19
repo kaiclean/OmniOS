@@ -87,6 +87,13 @@ export function ShellFrame({ rail, strip, banner, copilot, commands, children }:
         setPaletteOpen((open) => !open);
         return;
       }
+      // Overlays that cover the page must yield to Escape — the palette already
+      // handles its own; the rail drawer and copilot sheet are handled here.
+      if (event.key === 'Escape') {
+        setRailOpen(false);
+        setSheetOpen(false);
+        return;
+      }
       // Slash focuses the assistant, the way a terminal focuses a prompt — but
       // never while the founder is already typing somewhere.
       const target = event.target as HTMLElement | null;

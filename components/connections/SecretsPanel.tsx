@@ -4,9 +4,9 @@ import { useActionState, useState, useTransition } from 'react';
 
 import type { SecretKind, SecretMeta } from '@/lib/domain';
 import { SECRET_KINDS } from '@/lib/domain';
-import { formatRelative, pluralise } from '@/lib/format';
+import { pluralise } from '@/lib/format';
 import { forgetSecret, saveSecret, type SecretFormState } from '@/lib/actions/secrets';
-import { Badge, Empty } from '@/components/ui/primitives';
+import { Badge, Empty, RelativeTime } from '@/components/ui/primitives';
 
 const INITIAL: SecretFormState = { ok: false };
 
@@ -179,10 +179,10 @@ export function SecretsPanel({
                 </div>
                 <div className="list-secondary">
                   {secret.description || 'No description.'} · updated{' '}
-                  {formatRelative(secret.updatedAt)} ·{' '}
+                  <RelativeTime at={secret.updatedAt} /> ·{' '}
                   {secret.useCount === 0
                     ? 'never used'
-                    : `used ${pluralise(secret.useCount, 'time')}${secret.lastUsedAt ? `, last ${formatRelative(secret.lastUsedAt)}` : ''}`}
+                    : <>used {pluralise(secret.useCount, 'time')}{secret.lastUsedAt ? <>, last <RelativeTime at={secret.lastUsedAt} /></> : ''}</>}
                 </div>
               </div>
               <div className="list-meta">
