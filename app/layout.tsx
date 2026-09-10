@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 
 import { getWorkspace } from '@/lib/data/store';
 import './globals.css';
@@ -56,6 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to content
         </a>
         {children}
+        <SpeedInsights />
       </body>
     </html>
   );
