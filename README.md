@@ -71,11 +71,14 @@ Stated plainly, so nothing here is read as more than it is:
   `OMNIOS_DATA_DIR` at a synced folder (`lib/secrets/vault.ts`).
 - **Finance, creative and intelligence-feed providers are seams, not
   integrations.** They are inert until configured (`.env.example`).
-- **Nothing acts outward without a recorded human decision.** The MCP server in
-  `lib/mcp/serve.ts` is read-only by design.
+- **No tool acts outward without a recorded human decision.** The MCP server in
+  `lib/mcp/serve.ts` is read-only by design. Configuring a model provider is
+  itself the decision to send prompts and record-derived context to that
+  provider (`lib/ai/providers.ts`).
 - **No `LICENSE` file yet**, so no reuse rights are granted.
 - Why this repo exists next to OmniClaw, OmniDash and HermesClaw:
   [`docs/DECISIONS.md`](./docs/DECISIONS.md).
+- Module map and approval gates: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). Reporting a vulnerability: [`SECURITY.md`](./SECURITY.md).
 
 ---
 
