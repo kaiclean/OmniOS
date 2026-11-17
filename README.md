@@ -76,6 +76,7 @@ Stated plainly, so nothing here is read as more than it is:
 - **No `LICENSE` file yet**, so no reuse rights are granted.
 - Why this repo exists next to OmniClaw, OmniDash and HermesClaw:
   [`docs/DECISIONS.md`](./docs/DECISIONS.md).
+- Module map and approval gates: [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md). Reporting a vulnerability: [`SECURITY.md`](./SECURITY.md).
 
 ---
 
