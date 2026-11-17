@@ -63,9 +63,12 @@ Stated plainly, so nothing here is read as more than it is:
   There is no multi-user model.
 - **Access control is opt-in.** With no `OMNIOS_ACCESS_KEY` the app is open on
   localhost; the key is required for any remote use (`proxy.ts`, `ops/tunnel`).
-- **The vault shares a disk with its key** unless `OMNIOS_SECRET_KEY` is set. It
-  protects against leaks through sync, backups and commits, not against someone
-  holding your unlocked machine (`lib/secrets/vault.ts`).
+- **The vault shares a disk with its key** unless `OMNIOS_SECRET_KEY` is set. The
+  generated key is stored next to the ciphertext in the data directory
+  (`.secret-key`), so the vault protects a `secrets.json` that leaks on its own,
+  but not a synced or backed-up copy of the whole data directory, and not someone
+  holding your unlocked machine. Set `OMNIOS_SECRET_KEY` before pointing
+  `OMNIOS_DATA_DIR` at a synced folder (`lib/secrets/vault.ts`).
 - **Finance, creative and intelligence-feed providers are seams, not
   integrations.** They are inert until configured (`.env.example`).
 - **Nothing acts outward without a recorded human decision.** The MCP server in
