@@ -54,6 +54,28 @@ for every seam an integration can plug into.
 
 ---
 
+## Status and limits
+
+Stated plainly, so nothing here is read as more than it is:
+
+- **Single founder, single process.** The workspace is local files (or one SQLite
+  file); the login rate limiter is in-process state (`lib/auth/rate-limit.ts`).
+  There is no multi-user model.
+- **Access control is opt-in.** With no `OMNIOS_ACCESS_KEY` the app is open on
+  localhost; the key is required for any remote use (`proxy.ts`, `ops/tunnel`).
+- **The vault shares a disk with its key** unless `OMNIOS_SECRET_KEY` is set. It
+  protects against leaks through sync, backups and commits, not against someone
+  holding your unlocked machine (`lib/secrets/vault.ts`).
+- **Finance, creative and intelligence-feed providers are seams, not
+  integrations.** They are inert until configured (`.env.example`).
+- **Nothing acts outward without a recorded human decision.** The MCP server in
+  `lib/mcp/serve.ts` is read-only by design.
+- **No `LICENSE` file yet**, so no reuse rights are granted.
+- Why this repo exists next to OmniClaw, OmniDash and HermesClaw:
+  [`docs/DECISIONS.md`](./docs/DECISIONS.md).
+
+---
+
 ## What is in it
 
 | | |
