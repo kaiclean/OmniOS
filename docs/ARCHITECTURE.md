@@ -1,6 +1,6 @@
 # Architecture
 
-OmniOS is a local-first Next.js app that keeps several companies and a personal life in one workspace behind one Executive Assistant. The assistant grounds its answers in stored records, and any call that is destructive or leaves the machine waits for a recorded human decision.
+OmniOS is a local-first Next.js app that keeps several companies and a personal life in one workspace behind one Executive Assistant. The assistant grounds its answers in stored records, and any tool call tiered `destructive` or `external` waits for a recorded human decision. Model-provider requests are not tool calls: once a provider key is configured, prompts and the context derived from records are sent to that provider (`lib/ai/providers.ts`). With no provider configured the assistant reasons locally (`lib/ai/compose.ts`).
 
 Why the repository is shaped this way: [`DECISIONS.md`](./DECISIONS.md). The invariants that must not be broken: [`../CLAUDE.md`](../CLAUDE.md).
 
@@ -56,5 +56,5 @@ flowchart LR
 - **Human approval.** `requiresApproval` in `lib/domain/tools.ts` returns true for every risk tier except `read` and `write` (and for `write` when `confirmWrites` is set). `proposeCore` applies it; `runTool` refuses gated calls. Decisions are written by `lib/approvals/decide.ts` before the call runs. Pinned by `tests/tools.test.ts`, `tests/grants.test.ts` and `tests/boundaries.test.ts`.
 - **Scope isolation.** Every store read names a scope. `tests/boundaries.test.ts` fails if anything under `lib/ai/` imports `lib/data/aggregate`, and ESLint forbids importing `lib/data/adapters/*` outside the facade (`eslint.config.mjs`).
 - **Telegram decisions.** The webhook checks a shared secret, then an HMAC bound to the chat, then the same approval path as the in-app buttons (`app/api/telegram/webhook/route.ts`, `lib/telegram/signing.ts`).
-- **External calls.** Outward capability arrives as an MCP server the founder connects; it passes the same gate. Provider keys are read from the vault or the environment (`.env.example`).
+- **External calls.** Outward capability arrives as an MCP server the founder connects; it passes the same gate. Requests to a configured model provider are the exception to per-call approval (`lib/ai/providers.ts`). Provider keys are read from the vault or the environment (`.env.example`).
 - **MCP server.** `lib/mcp/serve.ts` exposes read-only tools, each requiring a scope.
