@@ -53,6 +53,7 @@ flowchart LR
 ## Boundaries and gates
 
 - **Authentication.** Opt-in: with `OMNIOS_ACCESS_KEY` unset the app has no auth; with it set, `proxy.ts` requires a signed session cookie for everything except the paths listed in `lib/auth/paths.ts`. Those exempt routes (`/api/telegram/webhook`, `/api/health`) authenticate themselves.
+- **Response headers.** `next.config.mjs` sends `nosniff`, frame denial, a referrer policy and a permissions policy on every route; `tests/security-headers.test.ts` pins them.
 - **Human approval.** `requiresApproval` in `lib/domain/tools.ts` returns true for every risk tier except `read` and `write` (and for `write` when `confirmWrites` is set). `proposeCore` applies it; `runTool` refuses gated calls. Decisions are written by `lib/approvals/decide.ts` before the call runs. Pinned by `tests/tools.test.ts`, `tests/grants.test.ts` and `tests/boundaries.test.ts`.
 - **Scope isolation.** Every store read names a scope. `tests/boundaries.test.ts` fails if anything under `lib/ai/` imports `lib/data/aggregate`, and ESLint forbids importing `lib/data/adapters/*` outside the facade (`eslint.config.mjs`).
 - **Telegram decisions.** The webhook checks a shared secret, then an HMAC bound to the chat, then the same approval path as the in-app buttons (`app/api/telegram/webhook/route.ts`, `lib/telegram/signing.ts`).
