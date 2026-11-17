@@ -30,8 +30,8 @@ describe('response security headers', () => {
   it('applies the set to every route', async () => {
     const rules = await nextConfig.headers();
     expect(rules).toHaveLength(1);
-    expect(rules[0].source).toBe('/:path*');
-    expect(rules[0].headers).toBe(securityHeaders);
+    expect(rules[0]?.source).toBe('/:path*');
+    expect(rules[0]?.headers).toBe(securityHeaders);
   });
 
   it.each([

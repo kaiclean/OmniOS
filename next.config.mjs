@@ -1,8 +1,8 @@
-/** @type {import('next').NextConfig} */
 /**
  * Response headers for every route. Deliberately limited to headers that cannot
- * change how the app renders: no Content-Security-Policy here, because Next
- * emits inline bootstrap scripts and a policy without nonces would block them.
+ * change how the app renders: the Content-Security-Policy carries no script or
+ * default source, because Next emits inline bootstrap scripts and a policy
+ * without nonces would block them.
  * `frame-ancestors` is the modern form of X-Frame-Options; both are sent so older
  * browsers are covered. Exported so tests/security-headers.test.ts can pin them.
  */
@@ -14,6 +14,7 @@ export const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
 ];
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
