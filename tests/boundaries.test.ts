@@ -97,6 +97,34 @@ describe('invariant 2 — a decision has exactly two authors', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('keeps the executor modules reachable only through the runTool facade', async () => {
+    // The executors under lib/ai/tools/executors/ do not check approval; the one
+    // check is in `runTool` (lib/ai/tools/executors.ts). An importer that reached
+    // an executor directly would run a gated tool with no decision at all, so
+    // only the facade and the group modules themselves may name that directory.
+    const offenders: string[] = [];
+    const executorsDir = join(ROOT, 'lib', 'ai', 'tools', 'executors');
+    const facade = join(ROOT, 'lib', 'ai', 'tools', 'executors.ts');
+
+    for (const root of ['lib', 'app', 'components', 'proxy.ts']) {
+      const files = root.endsWith('.ts') ? [join(ROOT, root)] : await sourceFiles(join(ROOT, root));
+      for (const file of files) {
+        if (file === facade || file.startsWith(executorsDir + '/')) continue;
+        const source = await readFile(file, 'utf8');
+        const reachesIn = importedModules(source).some((specifier) => {
+          const target = specifier.startsWith('@/')
+            ? join(ROOT, specifier.slice(2))
+            : specifier.startsWith('.')
+              ? resolve(join(file, '..'), specifier)
+              : null;
+          return target !== null && target.startsWith(executorsDir + '/');
+        });
+        if (reachesIn) offenders.push(relative(ROOT, file));
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('is only ever carried into runTool alongside the grant that justifies it', async () => {
     // The grant path is the one place `propose.ts` may hand `runTool` an
     // approval. If that construction ever stops being guarded by a found grant,
