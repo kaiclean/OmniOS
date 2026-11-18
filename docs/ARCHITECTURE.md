@@ -44,7 +44,7 @@ flowchart LR
 | Tools and gate | Tool catalogue with risk tiers, proposing, running | `lib/ai/tools/registry.ts`, `propose.ts`, `executors.ts` (gate and table), `executors/` (executor groups), `lib/domain/tools.ts` |
 | Approvals | Persists who decided, before the call runs | `lib/approvals/decide.ts`, `lib/actions/tools.ts` |
 | Persistence | Store facade over a port with two adapters | `lib/data/store.ts`, `store-port.ts`, `adapters/` |
-| Cross-space view | The only module that reads across scopes | `lib/data/aggregate.ts` |
+| Cross-space view | The only module that reads across scopes | `lib/data/aggregate.ts` (facade), `lib/data/aggregate/` |
 | Vault | AES-256-GCM secrets store | `lib/secrets/vault.ts` |
 | MCP | Outbound client, bridged to tools; separate read-only server | `lib/mcp/client.ts`, `lib/mcp/serve.ts`, `lib/ai/tools/mcp-bridge.ts` |
 | Telegram | Approval delivery and signed callbacks | `lib/telegram/`, `app/api/telegram/webhook/route.ts` |
