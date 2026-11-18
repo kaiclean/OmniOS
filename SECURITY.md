@@ -13,6 +13,7 @@ Please report privately. Use GitHub's private vulnerability reporting on this re
 OmniOS is a single-founder app that runs on one trusted machine. What the code does about it:
 
 - **Remote access.** With `OMNIOS_ACCESS_KEY` set, `proxy.ts` puts pages, Server Actions and APIs behind a signed, HttpOnly session cookie. The production start script binds `127.0.0.1` and the runbook uses an outbound-only tunnel (`ops/`).
+- **Browser hardening.** Every response carries `nosniff`, frame-denial, referrer and permissions headers (`next.config.mjs`).
 - **Outward and irreversible actions.** Tools tiered `destructive` or `external` run only after a recorded human decision (`lib/domain/tools.ts`, `lib/approvals/decide.ts`).
 - **Approval from Telegram.** The webhook fails closed without its secret and verifies a chat-bound HMAC (`app/api/telegram/webhook/route.ts`, `lib/telegram/signing.ts`).
 - **Secrets.** Stored in an AES-256-GCM vault and kept out of agent context, tool calls and logs (`lib/secrets/vault.ts`). The workspace directory is git-ignored (`.gitignore`).
