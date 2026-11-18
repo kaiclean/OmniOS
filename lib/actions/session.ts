@@ -1,12 +1,12 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { safeEqual } from '@/lib/secrets/vault';
 import { SESSION_COOKIE, SESSION_MAX_AGE_MS, deriveSessionKey, issueToken } from '@/lib/auth/token';
 import { safeNextPath } from '@/lib/auth/paths';
-import { makeLimiter } from '@/lib/auth/rate-limit';
+import { clientKeyOf, makeClientLimiter } from '@/lib/auth/rate-limit';
 
 /**
  * The one place a session begins.
@@ -17,7 +17,7 @@ import { makeLimiter } from '@/lib/auth/rate-limit';
  * itself, so rotating the key invalidates every session ever issued.
  */
 
-const limiter = makeLimiter();
+const limiter = makeClientLimiter();
 
 export interface LoginState {
   readonly error?: string;
@@ -44,7 +44,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   // real defence against brute force.
   if (!safeEqual(submitted, accessKey)) {
     return {
-      error: limiter.allow()
+      error: limiter.allow(clientKeyOf(await headers()))
         ? 'That is not the access key.'
         : 'Too many attempts — wait a minute and try again.',
     };

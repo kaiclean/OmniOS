@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SESSION_MAX_AGE_MS, deriveSessionKey, issueToken, verifyToken } from '@/lib/auth/token';
 import { safeNextPath, shouldProtect } from '@/lib/auth/paths';
-import { makeLimiter } from '@/lib/auth/rate-limit';
+import { clientKeyOf, makeClientLimiter, makeLimiter } from '@/lib/auth/rate-limit';
 
 /**
  * The access gate. These are the properties that make a tunnel safe to stand
@@ -103,5 +103,37 @@ describe('the login rate limit', () => {
     // path that skips limiter.allow() entirely. The window being full is irrelevant.
     const correctKeyProceeds = true; // safeEqual → issue token, no limiter call
     expect(correctKeyProceeds).toBe(true);
+  });
+});
+
+describe('the per-client login budget', () => {
+  const start = NOW.getTime();
+
+  it('keeps one client’s failures from using up another’s allowance', () => {
+    const limiter = makeClientLimiter(60_000, 3, 100);
+    for (let i = 0; i < 3; i += 1) expect(limiter.allow('203.0.113.7', start + i)).toBe(true);
+    expect(limiter.allow('203.0.113.7', start + 5)).toBe(false);
+    expect(limiter.allow('198.51.100.2', start + 6)).toBe(true);
+  });
+
+  it('refills each client after the window', () => {
+    const limiter = makeClientLimiter(60_000, 2, 100);
+    limiter.allow('a', start);
+    limiter.allow('a', start + 1);
+    expect(limiter.allow('a', start + 2)).toBe(false);
+    expect(limiter.allow('a', start + 61_000)).toBe(true);
+  });
+
+  it('still bounds total guessing when every attempt claims a new client', () => {
+    const limiter = makeClientLimiter(60_000, 10, 5);
+    for (let i = 0; i < 5; i += 1) expect(limiter.allow(`made-up-${i}`, start + i)).toBe(true);
+    expect(limiter.allow('made-up-6', start + 10)).toBe(false);
+  });
+
+  it('reads the client from the tunnel header, then forwarded-for, else one shared key', () => {
+    const h = (entries: Record<string, string>) => new Headers(entries);
+    expect(clientKeyOf(h({ 'cf-connecting-ip': '203.0.113.7', 'x-forwarded-for': '1.1.1.1' }))).toBe('203.0.113.7');
+    expect(clientKeyOf(h({ 'x-forwarded-for': '198.51.100.2, 10.0.0.1' }))).toBe('198.51.100.2');
+    expect(clientKeyOf(h({}))).toBe('unknown');
   });
 });
