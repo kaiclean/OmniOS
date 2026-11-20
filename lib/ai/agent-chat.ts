@@ -8,12 +8,15 @@ import 'server-only';
  * phrases it. The conversation lives in the scope's `messages` collection under
  * an `agent:<id>` channel, so it persists like the assistant's history without
  * ever mixing into it.
+ * The Offerten specialist instead directs private intake to its local review
+ * surface without contacting a model.
  */
 
 import type { AssistantMessage, Scope, SpecialistAgent } from '@/lib/domain';
 import { readScope } from '@/lib/data/store';
 import { briefingFor } from './meeting';
 import { activeProvider } from './providers';
+import { publicRecords } from '@/lib/domain/local-only';
 
 export function agentChannel(agentId: string): string {
   return `agent:${agentId}`;
@@ -41,13 +44,20 @@ export async function directAgentReply(
     readonly provider?: Awaited<ReturnType<typeof activeProvider>>;
   } = {},
 ): Promise<AgentReply> {
+  if (specialist.capabilityIds.includes('offerten')) {
+    return {
+      text: 'Offerten inputs stay local. Prepare, revise and approve quotes in the Offerten review screen; no model or generic workspace action ran.',
+      simulated: true,
+      providerId: 'local-reasoning',
+    };
+  }
   const data = await readScope(scope);
   const briefing = briefingFor(specialist, data);
   const provider = options.provider ?? (await activeProvider());
 
   if (!provider.simulated) {
     try {
-      const recent = history
+      const recent = publicRecords('messages', history)
         .slice(-10)
         .map((message) => `${message.role === 'founder' ? 'Founder' : specialist.name}: ${message.text}`)
         .join('\n');

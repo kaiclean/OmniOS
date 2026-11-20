@@ -13,6 +13,8 @@ import {
 } from '@/lib/domain';
 import { capabilityIds } from '@/lib/capabilities/registry';
 import { getWorkspace, insertRecords, readScope, removeRecord } from '@/lib/data/store';
+import { isOffertenRecord } from '@/lib/domain/local-only';
+import { getOffertenState } from '@/lib/offerten/service';
 
 /**
  * Memory promotion — the one path by which anything crosses a scope boundary.
@@ -21,7 +23,8 @@ import { getWorkspace, insertRecords, readScope, removeRecord } from '@/lib/data
  * `promotionCheck`, it runs on the server against the text as submitted, and a
  * refusal returns the violations rather than a generic failure: the founder has
  * to be able to see *why* a lesson was rejected, or they will assume the check
- * is theatre.
+ * is theatre. Offerten source and derived records cannot be promoted at all,
+ * even when a replacement sentence would otherwise pass the text check.
  */
 
 export interface PromotionOutcome {
@@ -72,6 +75,12 @@ async function identifyingTerms(scope: Scope): Promise<string[]> {
   for (const person of data.relationships) {
     terms.push(person.name);
   }
+  if (scope.kind === 'company') {
+    const state = await getOffertenState(scope);
+    for (const quote of [...state.quotes, ...state.catalogue]) {
+      terms.push(quote.header.customer ?? '', quote.header.site ?? '');
+    }
+  }
 
   return [...new Set(terms.map((term) => term.trim()).filter((term) => term.length >= 5))];
 }
@@ -116,6 +125,9 @@ export async function promoteMemory(
   const data = await readScope(scope);
   const record = data.memory.find((entry) => entry.id === recordId);
   if (!record) return failed('That record no longer exists in this scope.');
+  if (isOffertenRecord(record)) {
+    return refused(['Offerten source material and derived memory stay local to this company and cannot be promoted.']);
+  }
 
   const candidate = text.trim() || record.text;
   if (candidate.length < 12) return failed('Too short to be a lesson another space could use.');

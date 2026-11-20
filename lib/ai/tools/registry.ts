@@ -45,6 +45,8 @@ import {
 } from '@/lib/domain';
 import { capabilityIds } from '@/lib/capabilities/registry';
 import { EMPTY, formatMinorAmount } from '@/lib/format';
+import { OFFERTEN_TOOLS } from './offerten-registry';
+import { isOffertenRecord } from '@/lib/domain/local-only';
 
 /* ------------------------------------------------------- arg accessors ---- */
 
@@ -176,6 +178,7 @@ const PERSONAL = ['personal'] as const;
 /* --------------------------------------------------------------- tools ---- */
 
 const TOOL_LIST = [
+  ...OFFERTEN_TOOLS,
   /* ------------------------------------------------------------ work ------ */
   {
     /**
@@ -700,7 +703,9 @@ const TOOL_LIST = [
       { name: 'strength', type: 'number', description: '0 to 1 — how strongly to hold it.', required: false, default: 0.6 },
     ],
     preview: (args: ToolArgs) =>
-      `Remember, as a ${argText(args, 'kind', 'fact')} under ${argText(args, 'capabilityId', 'executive')} in this space only: ${quoted(args, 'text', 'nothing')}.`,
+      isOffertenRecord(args)
+        ? 'Store local-only Offerten memory in this company. Its contents cannot be promoted or sent to a provider.'
+        : `Remember, as a ${argText(args, 'kind', 'fact')} under ${argText(args, 'capabilityId', 'executive')} in this space only: ${quoted(args, 'text', 'nothing')}.`,
   },
   /* ------------------------------------------------------------ life ----- */
   {

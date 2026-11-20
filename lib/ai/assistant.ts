@@ -5,6 +5,10 @@
  * router, the specialists, the composers, the providers — sits behind `ask()`.
  * The founder never selects an agent; they ask, and the plan attached to the
  * answer shows who was consulted and on what evidence.
+ * Private Offerten collections and derived records are removed before the
+ * composition, context references or provider prompts can inspect them.
+ * The private page and specialist never send intake to a model or generic
+ * mutation; their marked transcripts remain local and out of later history.
  */
 
 import 'server-only';
@@ -25,7 +29,7 @@ import { SPECIALISTS } from './specialists';
 import { rosterFor } from './roster';
 import { proposeCore } from './tools/propose';
 import { compose } from './compose';
-import { activeProvider } from './providers';
+import { activeProvider, simulatedProvider } from './providers';
 import { learnFromInteraction } from '@/lib/learning/engine';
 import type { LoopResult } from './loop';
 import { describeLoop, runActLoop } from './loop';
@@ -33,6 +37,14 @@ import { availableTools } from './available';
 import { describeSelf } from './self';
 import { recallAcrossSpaces, type SpaceRecallSource } from './recall';
 import { NOT_WIRED_TOOL_IDS } from './tools/executors';
+import { publicRecords } from '@/lib/domain/local-only';
+import type { ScopeData } from '@/lib/data/schema';
+
+function assistantData(data: ScopeData): ScopeData {
+  return Object.fromEntries(
+    Object.entries(data).map(([collection, records]) => [collection, publicRecords(collection, records)]),
+  ) as unknown as ScopeData;
+}
 
 /**
  * Founder-mode conversations store in the personal scope (it is the founder's
@@ -71,14 +83,14 @@ export async function loadContext(target: AssistantTarget, now = new Date()): Pr
         scopeKey: scopeKey(scope),
         label: company.name,
         spaceKind: 'company',
-        data: await readScope(scope),
+        data: assistantData(await readScope(scope)),
       });
     }
     slices.push({
       scopeKey: 'personal',
       label: workspace.personal.displayName,
       spaceKind: 'personal',
-      data: await readScope(personalScope()),
+      data: assistantData(await readScope(personalScope())),
     });
   } else if (target.scope.kind === 'company') {
     const id = target.scope.companyId;
@@ -86,21 +98,21 @@ export async function loadContext(target: AssistantTarget, now = new Date()): Pr
       scopeKey: scopeKey(target.scope),
       label: workspace.companies.find((c) => c.id === id)?.name ?? id,
       spaceKind: 'company',
-      data: await readScope(target.scope),
+      data: assistantData(await readScope(target.scope)),
     });
   } else if (target.scope.kind === 'personal') {
     slices.push({
       scopeKey: 'personal',
       label: workspace.personal.displayName,
       spaceKind: 'personal',
-      data: await readScope(target.scope),
+      data: assistantData(await readScope(target.scope)),
     });
   }
 
   const sharedMemory: MemoryRecord[] = [];
   for (const capabilityId of capabilityIds()) {
     const data = await readScope(sharedScope(capabilityId));
-    sharedMemory.push(...data.memory);
+    sharedMemory.push(...publicRecords('memory', data.memory));
   }
 
   return {
@@ -236,12 +248,14 @@ export async function ask(
     };
   }
   const composition = compose(ctx, spoken, routing);
+  const privateInput = target.page?.capabilityId === 'offerten' ||
+    routing.lead.capabilityIds.includes('offerten');
 
   // Acting. The scope a call lands in is decided here — server-side, never by
   // the model: space mode acts in that space; founder mode acts in the space of
   // the page being looked at, or nowhere. Every planned call goes through the
   // same propose→gate path as a typed form.
-  const provider = await activeProvider();
+  const provider = privateInput ? simulatedProvider : await activeProvider();
 
   // "What model are you?" is a question about the system, and the system knows
   // the answer — replying "unknown" while the footer names the provider was a
@@ -287,7 +301,7 @@ export async function ask(
   // the acting half asked a question the answering half had already answered.
   // Both messages of the current turn persist at the end of ask(), so this can
   // never include the prompt it is context for.
-  const channelHistory: LlmMessage[] = (await conversation(target, options.channel))
+  const channelHistory: LlmMessage[] = publicRecords('messages', await conversation(target, options.channel))
     .slice(-6)
     .map((entry) => ({
       role: entry.role === 'founder' ? ('user' as const) : ('assistant' as const),
@@ -296,7 +310,9 @@ export async function ask(
 
   const actLines: string[] = [];
   let loopResult: LoopResult | undefined;
-  if (!metaTurn && actScope && actScope.kind !== 'shared') {
+  if (privateInput) {
+    actLines.push('Offerten inputs stay local. Use the Offerten review screen to prepare, revise and approve a quote; no model or generic workspace action ran.');
+  } else if (!metaTurn && actScope && actScope.kind !== 'shared') {
     if (slash?.parseError) {
       // The command was recognised but its input was not usable — the reply is
       // the registry's own guidance, not a briefing.
@@ -337,6 +353,8 @@ export async function ask(
   } else if (slash) {
     actLines.push('A /command acts inside a space — open a company or your life first.');
   }
+  const privateTurn = privateInput ||
+    (loopResult?.steps.some((step) => step.toolId.startsWith('offerten.')) ?? false);
 
   /**
    * What this question needs from memory, ranked — not the first few records
@@ -367,7 +385,7 @@ export async function ask(
             })),
           { scope: personalScope(), label: ctx.personal.displayName },
         ];
-  const recalledHits = await recallAcrossSpaces(recallSources, { text: prompt, limit: 5, now });
+  const recalledHits = await recallAcrossSpaces(recallSources, { text: prompt, limit: 5, now, localOnly: privateTurn });
   const recalled =
     recalledHits.length > 0
       ? `What you know about this founder that bears on this question, most relevant first. Use it to shape the reply; never state it back as a finding:\n${recalledHits
@@ -421,7 +439,7 @@ export async function ask(
           .join('\n')}`
       : '';
 
-  if (!provider.simulated && !commandTurn && !metaTurn) {
+  if (!provider.simulated && !commandTurn && !metaTurn && !privateTurn) {
     try {
       const workspace = await getWorkspace();
       const response = await provider.complete({
@@ -475,7 +493,9 @@ export async function ask(
     }
   }
 
-  if (commandTurn && actLines.length > 0) {
+  if (privateInput) {
+    text = actLines.join('\n');
+  } else if (commandTurn && actLines.length > 0) {
     text = actLines.join('\n');
   } else if (actLines.length > 0) {
     text = `${actLines.join('\n')}\n\n${text}`;
@@ -486,11 +506,11 @@ export async function ask(
   // the menu back at it — which the local path then could not parse. An offer
   // that cannot be taken by tapping it is a menu, not an ability.
   const actions: { label: string; insert: string }[] = [];
-  if (acceptedActions) {
+  if (!privateInput && acceptedActions) {
     actions.push(...acceptedActions);
-  } else if (slash?.parseError) {
+  } else if (!privateInput && slash?.parseError) {
     actions.push({ label: `Retry /${slash.label}`, insert: `/${slash.label} ` });
-  } else if (!slash && !selfTurn && composition.orientation && actScope && actScope.kind !== 'shared') {
+  } else if (!privateInput && !slash && !selfTurn && composition.orientation && actScope && actScope.kind !== 'shared') {
     actions.push(...STANDING_VERB_ACTIONS);
   }
 
@@ -518,6 +538,7 @@ export async function ask(
     simulated,
     providerId: provider.id,
     ...(storedChannel ? { channel: storedChannel } : {}),
+    ...(privateTurn ? { localOnly: 'offerten' as const } : {}),
   };
 
   const founderMessage: AssistantMessage = {
@@ -531,6 +552,7 @@ export async function ask(
     simulated: false,
     providerId: provider.id,
     ...(storedChannel ? { channel: storedChannel } : {}),
+    ...(privateTurn ? { localOnly: 'offerten' as const } : {}),
   };
 
   const run: AgentRun = {
@@ -546,6 +568,7 @@ export async function ask(
     simulated,
     ...(tokensIn === undefined ? {} : { tokensIn }),
     ...(tokensOut === undefined ? {} : { tokensOut }),
+    ...(privateTurn ? { localOnly: 'offerten' as const } : {}),
   };
 
   await insertRecords(storageScope, 'messages', [message, founderMessage]);
@@ -555,7 +578,7 @@ export async function ask(
   // makes "learns with every interaction" a property of the code rather than a
   // claim in a README: observations are drawn, beliefs are reinforced or fade,
   // consulted specialists get an invocation, and used memory gets stronger.
-  await learnFromInteraction({
+  if (!privateTurn) await learnFromInteraction({
     interaction: {
       scope: storageScope,
       prompt,

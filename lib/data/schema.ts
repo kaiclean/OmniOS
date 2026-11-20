@@ -7,6 +7,7 @@
  */
 
 import { DEFAULT_TELEGRAM_CONFIG } from '@/lib/domain';
+import type { OffertenState } from '@/lib/offerten/schema';
 import type {
   AgentRun,
   CustomAgent,
@@ -88,6 +89,8 @@ export interface ScopeData {
   specialistScores: SpecialistScore[];
   customAgents: CustomAgent[];
   meetings: Meeting[];
+  /** Private catalogue; never part of generic assistant context or search. */
+  offerten: OffertenState[];
 }
 
 export type CollectionName = keyof ScopeData;
@@ -124,6 +127,7 @@ export const COLLECTION_NAMES: readonly CollectionName[] = [
   'specialistScores',
   'customAgents',
   'meetings',
+  'offerten',
 ];
 
 export function emptyScopeData(): ScopeData {
@@ -159,6 +163,7 @@ export function emptyScopeData(): ScopeData {
     specialistScores: [],
     customAgents: [],
     meetings: [],
+    offerten: [],
   };
 }
 

@@ -6,10 +6,9 @@ import 'server-only';
  *
  * Three properties hold across every executor in this file:
  *
- * 1. **Everything goes through `lib/data/store.ts`.** No executor touches the
- *    filesystem, and every read and write names a scope, so a crafted id cannot
- *    reach a record in another space — it is simply not in the collection that
- *    was read.
+ * 1. **Workspace records go through `lib/data/store.ts`.** Every read and write
+ *    names a scope, so a crafted id cannot reach another space. Offerten's
+ *    dedicated service also verifies its company-local derived rule file.
  * 2. **The tier is the gate, and the gate lives in `runTool`.** Executors are
  *    never called directly by application code; `runTool` asks
  *    `requiresApproval(tool.risk)` first and refuses without a recorded
@@ -20,10 +19,11 @@ import 'server-only';
  *    run through `redact` on the way out. The persisted `ToolCall` keeps the
  *    `{{secret:NAME}}` placeholder, never the value.
  *
- * The three `external` tools are declared and refuse. That is deliberate: an
- * executor that pretended to send an email would be a lie in the one place a
- * founder most needs the system to be literal, and declaring them is what proves
- * the approval gate works end to end.
+ * The three generic `external` tools are declared and refuse: pretending to
+ * deliver an email would lie where literal truth matters most. Offerten adds
+ * an explicitly local fixture package, independently verifies its persisted
+ * revision-bound decision, and returns static receipts rather than private
+ * pricing material to the planner.
  */
 
 import type { CustomAgent } from '@/lib/domain';
@@ -107,6 +107,18 @@ import { callMcpTool } from '@/lib/mcp/client';
 import { mcpToolDefinition } from './mcp-bridge';
 import { capabilitiesFor, getCapability } from '@/lib/capabilities/registry';
 import { allSecretValues } from '@/lib/secrets/vault';
+import { isOffertenRecord, publicRecords } from '@/lib/domain/local-only';
+import {
+  compareOfferte,
+  deleteOfferten,
+  draftOfferte,
+  editOfferte,
+  exportOfferten,
+  ingestFixture,
+  recordApprovedSend,
+  updateOffertenMemory,
+} from '@/lib/offerten/service';
+import type { OffertenEdit } from '@/lib/offerten/schema';
 import {
   CAPABILITY_SCOPED_COLLECTIONS,
   CALENDAR_BLOCK_KINDS,
@@ -545,7 +557,11 @@ const remember: ToolExecutor = async (ctx, args) => {
   // workspace with no embedding key simply stores none — `recallMemory` ranks
   // lexically until every record has one, so there is no half-migrated state
   // where some records are findable and others silently are not.
-  const vector = (await embedTexts([text]))?.vectors[0];
+  const localOnly = isOffertenRecord({
+    capabilityId: argText(args, 'capabilityId'),
+    tags: listArg(args, 'tags'),
+  });
+  const vector = localOnly ? undefined : (await embedTexts([text]))?.vectors[0];
 
   const record: MemoryRecord = {
     ...base(ctx, 'mem', text),
@@ -553,7 +569,7 @@ const remember: ToolExecutor = async (ctx, args) => {
     text,
     capabilityId: capabilityFor(ctx, args, 'executive'),
     strength: clamp01(strength ?? 0.6),
-    tags: listArg(args, 'tags'),
+    tags: [...new Set([...listArg(args, 'tags'), ...(localOnly ? ['offerten-internal'] : [])])],
     source: 'assistant',
     useCount: 0,
     ...(vector ? { embedding: vector } : {}),
@@ -561,7 +577,11 @@ const remember: ToolExecutor = async (ctx, args) => {
   // Written into this scope only. Reaching shared capability memory needs
   // promoteMemory and the gate it runs — never a tool call.
   await insertRecords(ctx.scope, 'memory', [record]);
-  return ok(`Remembered, as a ${record.kind} in this space only: “${text}”.`, [record.id]);
+  return ok(
+    localOnly ? 'Stored local-only Offerten memory. Its contents stay in Offerten.' :
+      `Remembered, as a ${record.kind} in this space only: “${text}”.`,
+    [record.id],
+  );
 };
 
 const HEALTH_FIELDS = [
@@ -850,7 +870,7 @@ const searchWorkspace: ToolExecutor = async (ctx, args) => {
       collection as Parameters<typeof readCollection>[1],
     )) as unknown as ReadonlyArray<Record<string, unknown>>;
 
-    for (const record of records) {
+    for (const record of publicRecords(collection, records)) {
       const haystack = searchableText(record);
       // Every word must appear. An OR would return the whole workspace for a
       // two-word question, which is the same as returning nothing useful.
@@ -876,7 +896,7 @@ const getRecord: ToolExecutor = async (ctx, args) => {
     ctx.scope,
     collection as Parameters<typeof readCollection>[1],
   )) as unknown as ReadonlyArray<Record<string, unknown>>;
-  const found = records.find((record) => record['id'] === recordId);
+  const found = publicRecords(collection, records).find((record) => record['id'] === recordId);
 
   if (!found) {
     // Named plainly rather than as an error: an id that is not here is a fact
@@ -1012,7 +1032,40 @@ const openMeetingTool: ToolExecutor = async (ctx, args) => {
   );
 };
 
+/** Only static receipts cross back into a planner; review details stay local. */
+function offertenOutcome(outcome: ToolOutcome, summary: string): ToolOutcome {
+  return outcome.ok
+    ? ok(summary, outcome.affectedIds)
+    : refuse('Offerten refused this operation. Review the local Offerten screen.', 'offerten-refused');
+}
+
 const EXECUTORS: Record<ToolId, ToolExecutor> = {
+  'offerten.ingest': async (ctx, args) =>
+    offertenOutcome(await ingestFixture(ctx, args), 'Ingested the labelled local Offerten fixture.'),
+  'offerten.draft': async (ctx, args) =>
+    offertenOutcome(await draftOfferte(ctx, args), 'Created a generated local Offerte draft. Review it in Offerten.'),
+  'offerten.compare': async (ctx, args) => {
+    await compareOfferte(ctx.scope, argText(args, 'quoteId'));
+    return ok('Computed the local Offerte comparison. Private details remain in Offerten.');
+  },
+  'offerten.edit': async (ctx, args) => {
+    const edits = JSON.parse(argText(args, 'edits')) as OffertenEdit;
+    const quote = await editOfferte(ctx.scope, argText(args, 'quoteId'), edits, ctx.now);
+    return ok('Created a new local Offerte revision. A send requires a fresh revision-bound approval.', [quote.id]);
+  },
+  'offerten.send': async (ctx, args) =>
+    offertenOutcome(
+      await recordApprovedSend(ctx, argText(args, 'quoteId'), argNumber(args, 'revision') ?? Number.NaN),
+      'Recorded the approved fixture send receipt. No live delivery ran.',
+    ),
+  'offerten.update_memory': async (ctx, args) =>
+    offertenOutcome(await updateOffertenMemory(ctx, argText(args, 'quoteId')), 'Updated local-only Offerten feedback.'),
+  'offerten.export': async (ctx) => {
+    await exportOfferten(ctx.scope);
+    return ok('Prepared the private Offerten export locally. Download it from Offerten.');
+  },
+  'offerten.delete': async (ctx) =>
+    offertenOutcome(await deleteOfferten(ctx.scope), 'Deleted this company’s private Offerten data and derived copies.'),
   create_company: createCompanyTool,
   hire_agent: hireAgentTool,
   open_meeting: openMeetingTool,
@@ -1215,11 +1268,26 @@ export async function runTool(
     );
   }
 
-  if (requiresApproval(tool.risk, await approvalPolicy()) && !options.approval) {
+  const gated = requiresApproval(tool.risk, await approvalPolicy());
+  if (gated && !options.approval) {
     return refuse(
       `${tool.label} is waiting for your decision.`,
       `${tool.label} is ${tool.risk}. It does not run until a human decision is recorded against it.`,
     );
+  }
+
+  if (gated && tool.id.startsWith('offerten.')) {
+    const calls = await readCollection(ctx.scope, 'toolCalls');
+    const call = calls.find((candidate) => candidate.id === ctx.callId);
+    const matches = call?.status === 'approved' && call.toolId === tool.id &&
+      Boolean(call.decidedBy) && Boolean(call.decidedAt) &&
+      !call.grantId && call.decidedBy === options.approval?.decidedBy &&
+      call.decidedAt === options.approval?.decidedAt &&
+      scopeKey(call.scope) === scopeKey(ctx.scope) &&
+      JSON.stringify(call.args) === JSON.stringify(validation.coerced);
+    if (!matches) {
+      return refuse('Offerten is waiting for a matching recorded decision.', 'approval-not-recorded');
+    }
   }
 
   const remote = parseMcpToolId(tool.id) !== null;
@@ -1236,7 +1304,9 @@ export async function runTool(
   } catch (error) {
     outcome = refuse(
       `${tool.label} failed.`,
-      error instanceof Error ? error.message : 'The executor threw a non-error value.',
+      tool.id.startsWith('offerten.')
+        ? 'Offerten could not complete this operation. Review the local Offerten screen.'
+        : error instanceof Error ? error.message : 'The executor threw a non-error value.',
     );
   }
 

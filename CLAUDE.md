@@ -94,6 +94,7 @@ components/
   shell/             rail, overview strip, copilot, command palette   (client)
   panels/            the capability panel renderer                    (server)
   assistant/ agents/ approvals/ connections/ …                        (interaction)
+  offerten/          company-only quote review; private vs customer documents
   ui/                primitives + the hand-drawn icon set
 lib/
   domain/            types and the scope boundary — no I/O, no server-only
@@ -110,6 +111,7 @@ lib/
   secrets/           the encrypted vault
   learning/          observation, reinforcement, evolution log, routing hints
   business/          the launch playbook
+  offerten/          fixture connector, quote schemas, pricing, private memory, service
   brain/ personal/   brain-graph model; energy derivation
   ui/ format.ts      page context labels, space tint; all number/money formatting
 ops/                 Mac runbook: setup, tunnel, heartbeat, backup, restore, launchd
@@ -130,6 +132,17 @@ tests/               logic-layer tests (vitest, node environment)
 | The gate that records | `lib/actions/tools.ts`, `lib/approvals/decide.ts` |
 | Local reasoning with no API key | `lib/ai/compose.ts` |
 | Model providers and selection | `lib/ai/providers.ts` |
+| Company-only quote workflow and private memory | `lib/offerten/`, `lib/actions/offerten.ts`, `components/offerten/` |
+
+Offerten's rollout contract is in `docs/offerten/`. It is fixture-only: no live
+ERP, customer sending, real-data pilot or fine-tuning is implied. Its customer
+document is an allowlist, not a redacted internal sheet. Keep private prices,
+costs, margins, owner commentary and Offerten memory out of generic recall,
+assistant/provider context, MCP reads and shared promotion. UI mutations must
+use `proposeCore`, including edits (`expectedRevision`) and local exports;
+fixture sends still require the normal recorded, revision-bound approval.
+Company scope is not authentication: the founder's tenancy decision is pending,
+and any pilot login requires its own workspace/data directory.
 
 ## How the assistant works
 

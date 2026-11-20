@@ -34,6 +34,7 @@ export const PANEL_KINDS = [
   'calendar',
   'products',
   'memory',
+  'offerten-review',
 ] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 

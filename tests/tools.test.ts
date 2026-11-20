@@ -69,9 +69,9 @@ describe('tool registry', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('uses snake_case ids that read as verbs', () => {
+  it('uses snake_case verbs, optionally in the explicit Offerten namespace', () => {
     for (const tool of TOOLS) {
-      expect(tool.id, `${tool.id} is not snake_case`).toMatch(/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/);
+      expect(tool.id, `${tool.id} is not a namespaced snake_case verb`).toMatch(/^(?:offerten\.)?[a-z][a-z0-9]*(_[a-z0-9]+)*$/);
     }
   });
 
@@ -229,6 +229,25 @@ describe('tool parameters', () => {
     const result = validateArgs(tool, { taskId: 'task_1', scope: 'company:someone-else', __proto__: 'x' });
     expect(result.ok).toBe(true);
     expect(Object.keys(result.coerced)).toEqual(['taskId']);
+  });
+
+  it('keeps legacy text truncation but rejects overflow for explicit structured bounds', () => {
+    const tool = getTool('write_doc') as ToolDefinition;
+    const body = 'x'.repeat(8500);
+    const legacy = validateArgs(tool, { title: 'Document', body });
+    expect(legacy.ok).toBe(true);
+    expect(String(legacy.coerced.body)).toHaveLength(8000);
+    const bounded: ToolDefinition = {
+      ...tool,
+      params: tool.params.map((param) => param.name === 'body' ? { ...param, maxLength: 9000 } : param),
+    };
+    const valid = validateArgs(bounded, { title: 'Document', body });
+    expect(valid.ok).toBe(true);
+    expect(valid.coerced.body).toBe(body);
+    const invalid = validateArgs(bounded, { title: 'Document', body: 'x'.repeat(9001) });
+    expect(invalid.ok).toBe(false);
+    expect(invalid.errors).toContain('body must not exceed 9000 characters');
+    expect(invalid.coerced.body).toBeUndefined();
   });
 });
 

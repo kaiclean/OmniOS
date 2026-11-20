@@ -106,6 +106,8 @@ export interface MessageAction {
 }
 
 export interface AssistantMessage extends ScopedRecord {
+  /** Private workflow transcripts are never provider history or MCP data. */
+  readonly localOnly?: 'offerten';
   readonly role: MessageRole;
   readonly text: string;
   readonly at: Timestamp;
@@ -126,6 +128,7 @@ export interface AssistantMessage extends ScopedRecord {
 }
 
 export interface AgentRun extends ScopedRecord {
+  readonly localOnly?: 'offerten';
   readonly prompt: string;
   readonly startedAt: Timestamp;
   readonly finishedAt: Timestamp;

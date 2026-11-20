@@ -19,6 +19,9 @@
  *   everything else — no aggregate view exists on this boundary, so a harness
  *   task launched for one company can be handed exactly that company and
  *   nothing else.
+ * - **Local-only data stays local.** Offerten collections are not advertised;
+ *   tagged derived records and private tool payloads are excluded from every
+ *   generic collection, including summaries.
  *
  * The tool handlers are exported separately from the transport so the logic is
  * testable in vitest without spawning a process.
@@ -29,6 +32,9 @@ import { pathToFileURL } from 'node:url';
 import { COLLECTION_NAMES, type CollectionName } from '@/lib/data/schema';
 import { getWorkspace, readScope } from '@/lib/data/store';
 import { parseScopeKey } from '@/lib/domain';
+import { isLocalOnlyCollection, publicRecords } from '@/lib/domain/local-only';
+
+const EXPOSED_COLLECTIONS = COLLECTION_NAMES.filter((collection) => !isLocalOnlyCollection(collection));
 
 export interface OmniosMcpResult {
   readonly text: string;
@@ -67,7 +73,7 @@ export const OMNIOS_MCP_TOOLS = [
         scope: { type: 'string', description: 'The scope key to read from.' },
         collection: {
           type: 'string',
-          description: `One of: ${COLLECTION_NAMES.join(', ')}.`,
+          description: `One of: ${EXPOSED_COLLECTIONS.join(', ')}.`,
         },
         limit: { type: 'number', description: 'At most this many records (default 20, max 100).' },
       },
@@ -105,7 +111,7 @@ export async function handleOmniosTool(
     if (!scope) return error;
     const data = await readScope(scope);
     const counts = Object.fromEntries(
-      COLLECTION_NAMES.map((collection) => [collection, data[collection].length]),
+      EXPOSED_COLLECTIONS.map((collection) => [collection, publicRecords<unknown>(collection, data[collection]).length]),
     );
     return ok(JSON.stringify(counts, null, 2));
   }
@@ -114,13 +120,13 @@ export async function handleOmniosTool(
     const { scope, error } = requireScope(args);
     if (!scope) return error;
     const collection = typeof args.collection === 'string' ? args.collection : '';
-    if (!(COLLECTION_NAMES as readonly string[]).includes(collection)) {
-      return refuse(`"${collection}" is not a collection. One of: ${COLLECTION_NAMES.join(', ')}.`);
+    if (!(EXPOSED_COLLECTIONS as readonly string[]).includes(collection)) {
+      return refuse(`That collection is not exposed. One of: ${EXPOSED_COLLECTIONS.join(', ')}.`);
     }
     const rawLimit = typeof args.limit === 'number' ? Math.floor(args.limit) : 20;
     const limit = Math.min(Math.max(rawLimit, 1), 100);
     const data = await readScope(scope);
-    const records = data[collection as CollectionName].slice(0, limit);
+    const records = publicRecords<unknown>(collection, data[collection as CollectionName]).slice(0, limit);
     return ok(JSON.stringify(records, null, 2));
   }
 

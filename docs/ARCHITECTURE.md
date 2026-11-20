@@ -49,6 +49,7 @@ flowchart LR
 | MCP | Outbound client, bridged to tools; separate read-only server | `lib/mcp/client.ts`, `lib/mcp/serve.ts`, `lib/ai/tools/mcp-bridge.ts` |
 | Telegram | Approval delivery and signed callbacks | `lib/telegram/`, `app/api/telegram/webhook/route.ts` |
 | Ops | Mac runbook: server, tunnel, heartbeat, backup | `ops/` |
+| Offerten | Company-only fixture ingest, structured quote/customer/internal schemas, evidence-led prices, private memory, revision-checked edits and local receipts | `lib/offerten/`, `components/offerten/`, `lib/actions/offerten.ts` |
 
 ## Boundaries and gates
 
@@ -58,3 +59,53 @@ flowchart LR
 - **Telegram decisions.** The webhook checks a shared secret, then an HMAC bound to the chat, then the same approval path as the in-app buttons (`app/api/telegram/webhook/route.ts`, `lib/telegram/signing.ts`).
 - **External calls.** Outward capability arrives as an MCP server the founder connects; it passes the same gate. Requests to a configured model provider are the exception to per-call approval (`lib/ai/providers.ts`). Provider keys are read from the vault or the environment (`.env.example`).
 - **MCP server.** `lib/mcp/serve.ts` exposes read-only tools, each requiring a scope.
+
+## Offerten boundary
+
+Offerten is registered once, with a company-only panel and specialist. The
+existing dynamic company capability route renders its review panel; OS-level
+capability pages do not aggregate private quote sheets. Browser mutations first
+resolve an active company from the workspace, then use `proposeCore`. Fixture
+ingest and send are `external`, deletion is `destructive`, comparison is `read`,
+and draft/edit/memory/export are `write` (including `confirmWrites`).
+
+The scoped Offerten collection is not a generic CRUD/search or MCP collection.
+Private Offerten memory and related tool records are excluded from generic
+assistant/provider context and generic recall; its own retrieval is local-only.
+There is no model invocation or network connection in fixture ingestion/drafting.
+Ingestion can validate configured vault references inside its executor-facing
+path, but no resolved plaintext is retained or passed to the unauthenticated
+fixture adapter. Customer documents are built through a strict
+allowlist schema, never by redacting an internal sheet.
+
+The assistant on the Offerten surface, or a request routed to its specialist,
+stays local and redirects private intake to the review UI. It does not hand that
+turn to a provider, slash-command execution, action loop or query embedding.
+Private transcripts and runs are marked and excluded from generic histories.
+
+```mermaid
+flowchart LR
+  Review["Company Offerten review"] --> Action["Validated Server Action"]
+  Action --> Propose["proposeCore / existing policy"]
+  Propose --> Pending["Awaiting approval when required"]
+  Pending --> Decide["Inbox or signed Telegram decision"]
+  Propose --> Run["runTool"]
+  Decide --> Run
+  Run --> Service["Offerten service / company scope"]
+  Fixture["Generated fixture adapter"] --> Service
+  Service --> Scoped["Scoped Offerten state + private derived memory"]
+  Service --> Customer["Allowlisted customer document"]
+  Service --> Internal["Internal cost / margin / owner commentary"]
+  Customer --> Receipt["Revision-bound local fixture receipt"]
+```
+
+Edits require `expectedRevision`; sends require an exact `quoteId` and
+`revision`, plus the already-persisted decision for that call. A stale package
+fails rather than approving a changed document. Export tooling records only a
+static summary; an explicit scoped readback downloads the complete private
+bundle locally after an executed export. Deletion covers derived private
+memory and payload copies, while retaining decision metadata; downloaded files
+and backups remain the operator's responsibility.
+
+See [`offerten/DESIGN.md`](./offerten/DESIGN.md) for the actual Zod shapes and
+[`offerten/TENANCY.md`](./offerten/TENANCY.md) before any pilot access.

@@ -19,11 +19,16 @@ import 'server-only';
  * Scope isolation is not negotiated here. This ranks records it was handed; the
  * caller reads them from exactly one scope, and nothing in this file can widen
  * that.
+ *
+ * Offerten records are excluded from generic recall. The dedicated workflow
+ * must opt into both local-only retrieval and private records; local-only also
+ * disables query embedding, even when stored vectors exist.
  */
 
 import type { MemoryRecord, Scope } from '@/lib/domain';
 import { readCollection } from '@/lib/data/store';
 import { cosineSimilarity, embedTexts } from './embeddings';
+import { isOffertenRecord } from '@/lib/domain/local-only';
 
 export interface RecalledMemory {
   readonly record: MemoryRecord;
@@ -89,6 +94,10 @@ export interface RecallOptions {
   readonly capabilityId?: string;
   readonly limit?: number;
   readonly now?: Date;
+  /** Never send even the query to an embedding service. */
+  readonly localOnly?: boolean;
+  /** One company's local Offerten reasoning only; ignored without localOnly. */
+  readonly includeOfferten?: boolean;
 }
 
 /**
@@ -118,12 +127,12 @@ export interface RecalledAcrossSpaces extends RecalledMemory {
 
 export async function recallAcrossSpaces(
   sources: readonly SpaceRecallSource[],
-  options: Omit<RecallOptions, 'scope'>,
+  options: Omit<RecallOptions, 'scope' | 'includeOfferten'>,
 ): Promise<RecalledAcrossSpaces[]> {
   const limit = Math.min(Math.max(options.limit ?? 8, 1), 40);
   const perSpace = await Promise.all(
     sources.map(async (source) => {
-      const hits = await recallMemory({ ...options, scope: source.scope, limit });
+      const hits = await recallMemory({ ...options, scope: source.scope, limit, includeOfferten: false });
       return hits.map((hit) => ({ ...hit, spaceLabel: source.label }));
     }),
   );
@@ -139,9 +148,12 @@ export async function recallMemory(options: RecallOptions): Promise<RecalledMemo
 
   // One scope. The caller's scope, never a union of them.
   const all = await readCollection(options.scope, 'memory');
-  const filtered = options.capabilityId
-    ? all.filter((record) => record.capabilityId === options.capabilityId)
-    : all;
+  const includePrivate = options.scope.kind === 'company' &&
+    options.localOnly === true && options.includeOfferten === true;
+  const filtered = all.filter((record) =>
+    (!isOffertenRecord(record) || includePrivate) &&
+    (!options.capabilityId || record.capabilityId === options.capabilityId),
+  );
   // Scoring is O(candidates × terms), fine for years of normal use and unbounded
   // is unbounded. The store keeps collections newest-first, so capping keeps the
   // recent thousand — the ones recency weighting would favour anyway — and a
@@ -156,7 +168,7 @@ export async function recallMemory(options: RecallOptions): Promise<RecalledMemo
   let how: RecalledMemory['how'] = 'lexical';
   let relevance = lexicalScores(options.text, candidates);
 
-  if (haveVectors) {
+  if (haveVectors && !options.localOnly) {
     // Only the query needs embedding — the records were embedded on write. If
     // that one call fails, lexical scores are already computed and stand.
     const queryVector = (await embedTexts([options.text]))?.vectors[0];
