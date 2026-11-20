@@ -24,6 +24,7 @@ import type { SpecialistAgent } from '@/lib/domain';
 import { SPECIALISTS, getSpecialist } from './specialists';
 import { rosterFor, rosterNames } from './roster';
 import { activeProvider } from './providers';
+import { publicRecords } from '@/lib/domain/local-only';
 
 /**
  * Who belongs in the room for this topic.
@@ -56,16 +57,16 @@ export function briefingFor(specialist: SpecialistAgent, data: ScopeData): strin
   const owned = new Set(specialist.capabilityIds.length ? specialist.capabilityIds : capabilityIds());
   const lines: string[] = [];
 
-  const tasks = data.tasks.filter((t) => t.status !== 'done' && owned.has(t.capabilityId)).slice(0, 6);
+  const tasks = publicRecords('tasks', data.tasks).filter((t) => t.status !== 'done' && owned.has(t.capabilityId)).slice(0, 6);
   if (tasks.length) lines.push(`Open work: ${tasks.map((t) => `${t.title} (${t.status})`).join('; ')}`);
 
-  const kpis = data.kpis.filter((k) => owned.has(k.capabilityId)).slice(0, 5);
+  const kpis = publicRecords('kpis', data.kpis).filter((k) => owned.has(k.capabilityId)).slice(0, 5);
   if (kpis.length) lines.push(`Numbers: ${kpis.map((k) => `${k.label} = ${k.value}`).join('; ')}`);
 
-  const risks = data.risks.filter((r) => owned.has(r.capabilityId)).slice(0, 3);
+  const risks = publicRecords('risks', data.risks).filter((r) => owned.has(r.capabilityId)).slice(0, 3);
   if (risks.length) lines.push(`Risks on record: ${risks.map((r) => r.label).join('; ')}`);
 
-  const goals = data.goals.filter((g) => owned.has(g.capabilityId) && g.status !== 'achieved').slice(0, 3);
+  const goals = publicRecords('goals', data.goals).filter((g) => owned.has(g.capabilityId) && g.status !== 'achieved').slice(0, 3);
   if (goals.length) lines.push(`Goals: ${goals.map((g) => g.title).join('; ')}`);
 
   return lines.length ? lines.join('\n') : 'No records in this specialist’s capabilities yet.';

@@ -96,6 +96,7 @@ export function toolJsonSchema(tool: ToolDefinition): LlmToolSchema {
       type: param.type === 'number' ? 'number' : param.type === 'boolean' ? 'boolean' : 'string',
       description: param.description,
       ...(param.enumValues ? { enum: [...param.enumValues] } : {}),
+      ...(param.maxLength === undefined ? {} : { maxLength: param.maxLength }),
     };
     if (param.required && param.default === undefined) required.push(param.name);
   }

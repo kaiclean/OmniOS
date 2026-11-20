@@ -87,13 +87,45 @@ Stated plainly, so nothing here is read as more than it is:
 | | |
 | --- | --- |
 | **Companies** | A create form produces a complete headquarters: DNA, brand, competitors, KPIs, roadmap, ledger, CRM, SOPs, automations, risks, recommendations |
-| **Company HQ** | Executive Overview plus 13 capability pages, all registry-driven |
+| **Company HQ** | Executive Overview plus 14 capability pages, all registry-driven |
 | **Personal HQ** | Personal DNA, Life Overview, Health & Performance, Relationships, Learning, Life Admin |
-| **Capabilities** | 13 reusable company platforms granted to every company automatically, plus 4 for personal life, viewable per space or across all of them |
+| **Capabilities** | 14 reusable company platforms granted to every company automatically, plus 4 for personal life; Offerten review stays inside one company |
+| **Offerten** | Fixture ingest, evidence-led quote drafts, agent/hand-price comparison, private costs and margin, revision-checked owner edits, local export/deletion and approval-gated fixture send receipts; no live ERP or delivery |
 | **Assistant** | One surface, ~25 specialists behind it, with the delegation plan and evidence always inspectable |
 | **Brain** | Three memory scopes with a gated promotion path into shared knowledge |
 | **Intelligence** | Discovery feed with relevance scoring, and a Safe Upgrade Pipeline that never applies itself |
 | **Studio · Factory · Finance · Automations** | Creative briefs and assets, idea-to-product-plan, separated company/personal money, automations with an approval gate |
+
+---
+
+## Offerten — a local review workflow, not a live quoting integration
+
+Open a company → **Offerten**. Request fixture ingest, approve it in the existing
+Approvals inbox (or the configured Telegram door), create a draft, review the
+customer document separately from private unit economics, and save owner edits
+and an independent hand calculation. A send request is pinned to a revision:
+editing invalidates the old package. Approval records a **generated local fixture
+receipt**, not an email, ERP write or customer delivery. All mutations use the
+normal tool gate; `confirmWrites` also holds drafts, edits, memory and exports.
+
+Missing inputs and unmeasured outcomes remain `—`; fixture rows are not observed
+performance. Customer reasons use safe fixed labels, not private cost/rule text.
+Offerten memory is company-local and excluded from generic assistant context,
+search, MCP reads, promotion and provider transfer. Full exports are private
+local downloads, not customer attachments. On **2026-11-20**, the founder chose
+to keep pilots as company scopes / company records inside the founder's
+workspace for now, with no separate authenticated workspace per pilot yet.
+A company scope is **not authentication**; this does not authorize pilot login.
+Any future pilot login requires a new decision and a separate workspace/data
+directory and access key, not another company tab.
+
+No real customer data, live database credentials, sending, or model fine-tuning
+is part of this fixture delivery. ERP details, VAT/rounding policy, hosting,
+processor agreements, retention and any DPIA remain pending (`—`) before a real
+pilot. Design, schemas and boundaries: [`docs/offerten/DESIGN.md`](./docs/offerten/DESIGN.md);
+walkthrough: [`FLOW.md`](./docs/offerten/FLOW.md); engineering privacy checklist:
+[`PRIVACY.md`](./docs/offerten/PRIVACY.md); tenancy decision:
+[`TENANCY.md`](./docs/offerten/TENANCY.md).
 
 ---
 
@@ -167,6 +199,7 @@ components/
   shell/           rail, overview strip, copilot, command palette  (client)
   panels/          the capability panel renderer                   (server)
   approvals/ agents/ meetings/ connections/                        (interaction)
+  offerten/        company-only generated quote review and owner edits
   ui/              primitives and the hand-drawn icon set
 lib/
   domain/          types + the scope boundary
@@ -183,6 +216,7 @@ lib/
   brain/           the 3D brain graph model
   learning/        loop findings and reports
   personal/        energy derivation
+  offerten/        private fixture catalogue, schemas, pricing, memory, service
   actions/         every mutation, as Server Actions
 ops/               the Mac runbook: setup, tunnel, heartbeat, backup, launchd
 styles/            tokens, base, shell, components

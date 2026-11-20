@@ -10,8 +10,9 @@ import { getPreset } from '@/lib/ai/agent-presets';
 import { getSpecialist } from '@/lib/ai/specialists';
 import { agentChannel, directAgentReply } from '@/lib/ai/agent-chat';
 import { describeLoop, runActLoop } from '@/lib/ai/loop';
-import { activeProvider } from '@/lib/ai/providers';
+import { activeProvider, simulatedProvider } from '@/lib/ai/providers';
 import { rosterFor } from '@/lib/ai/roster';
+import { publicRecords } from '@/lib/domain/local-only';
 
 /**
  * Hiring and managing the roster.
@@ -19,7 +20,8 @@ import { rosterFor } from '@/lib/ai/roster';
  * Every agent is a scoped record: hired into one company or into life, never
  * globally. Nothing here touches the gate because an agent has no power of its
  * own — it only routes, speaks and proposes, and proposals still stop where
- * they always stop.
+ * they always stop. Offerten's direct conversation is private: no general tool
+ * loop or model runs, and its marked transcript cannot become generic history.
  */
 
 function resolveScope(scopeKeyInput: string): Scope | null {
@@ -233,6 +235,7 @@ export async function speakToAgent(
   if (!specialist) return { ok: false, error: 'That agent is not on this roster.' };
 
   const channel = agentChannel(agentId);
+  const privateInput = specialist.capabilityIds.includes('offerten');
   const messages = await readCollection(scope, 'messages');
   const history = messages
     .filter((message) => message.channel === channel)
@@ -251,6 +254,7 @@ export async function speakToAgent(
     simulated: false,
     providerId: 'founder',
     channel,
+    ...(privateInput ? { localOnly: 'offerten' as const } : {}),
   };
 
   // The agent can find things out and do things, through exactly the loop the
@@ -259,24 +263,25 @@ export async function speakToAgent(
   //
   // The agent acts as itself, not as the founder's assistant: its own charter
   // decides what it may reach. Subtractive only — it can never exceed the space.
-  const provider = await activeProvider();
-  const loop = await runActLoop(trimmed, {
+  const provider = privateInput ? simulatedProvider : await activeProvider();
+  const loop = privateInput ? { steps: [] } : await runActLoop(trimmed, {
     scope,
     provider,
     now,
     agent: specialist,
     // The same recollection the reply gets — the planner must be able to act
     // on "yes, do that" said to this agent, not just on self-contained orders.
-    history: history.slice(-6).map((entry) => ({
+    history: publicRecords('messages', history).slice(-6).map((entry) => ({
       role: entry.role === 'founder' ? ('user' as const) : ('assistant' as const),
       content: entry.text.length > 1200 ? `${entry.text.slice(0, 1200)}…` : entry.text,
     })),
   });
   const actLines = describeLoop(loop);
   const activity = loop.steps.map((step) => `- ${step.toolId}: ${step.summary}`).join('\n');
+  const privateTurn = privateInput || loop.steps.some((step) => step.toolId.startsWith('offerten.'));
 
   const reply = await directAgentReply(scope, specialist, history, trimmed, {
-    provider,
+    provider: privateTurn ? simulatedProvider : provider,
     ...(activity ? { activity } : {}),
   });
   const replyAt = new Date().toISOString();
@@ -291,9 +296,13 @@ export async function speakToAgent(
     simulated: reply.simulated,
     providerId: reply.providerId,
     channel,
+    ...(privateTurn ? { localOnly: 'offerten' as const } : {}),
   };
 
-  await insertRecords(scope, 'messages', [founderMessage, agentMessage]);
+  await insertRecords(scope, 'messages', [
+    { ...founderMessage, ...(privateTurn ? { localOnly: 'offerten' as const } : {}) },
+    agentMessage,
+  ]);
   revalidatePath('/', 'layout');
   return { ok: true };
 }

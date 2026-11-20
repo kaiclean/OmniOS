@@ -61,6 +61,8 @@ export interface ToolParam {
   readonly required: boolean;
   readonly enumValues?: readonly string[];
   readonly default?: string | number | boolean;
+  /** Explicit structured-string bound: reject overflow instead of truncating. */
+  readonly maxLength?: number;
   /** Names a secret this parameter accepts as `{{secret:NAME}}`. Resolved at execution only. */
   readonly acceptsSecret?: boolean;
 }
@@ -224,6 +226,11 @@ export function validateArgs(tool: ToolDefinition, raw: Readonly<Record<string, 
       }
       default: {
         const s = String(value).trim();
+        if (param.maxLength !== undefined) {
+          if (s.length > param.maxLength) errors.push(`${param.name} must not exceed ${param.maxLength} characters`);
+          else coerced[param.name] = s;
+          break;
+        }
         // A generous ceiling that still stops a runaway model writing a novel
         // into a task title and bloating the scope file.
         coerced[param.name] = s.slice(0, param.type === 'text' ? 8000 : 500);

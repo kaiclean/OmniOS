@@ -21,6 +21,10 @@ import 'server-only';
  * handed to the executor. If the run then fails, the record still shows that a
  * human said yes — which is the truth, and is what an audit of "who authorised
  * this" needs.
+ *
+ * An approved Offerten fixture package also authorises the local feedback
+ * promised in its preview, but only from the persisted sent revision. Rejection
+ * records metrics and the existing decision belief, never catalogue prices.
  */
 
 import type { Scope, ToolCall, ToolOutcome } from '@/lib/domain';
@@ -29,6 +33,8 @@ import { resolveTool, runTool } from '@/lib/ai/tools/executors';
 import type { ToolDecision } from '@/lib/learning/decisions';
 import { learnFromDecision } from '@/lib/learning/engine';
 import { resolveSecrets } from '@/lib/secrets/vault';
+import { getOffertenState, recordRejectedOfferte, updateOffertenMemory } from '@/lib/offerten/service';
+import { isOffertenRecord } from '@/lib/domain/local-only';
 
 /** The decider when the founder answered in the app itself. */
 export const LOCAL_DECIDER = 'founder';
@@ -91,7 +97,7 @@ async function learnDecision(
         scope,
         toolId: call.toolId,
         toolLabel: tool?.label ?? call.toolId,
-        capabilityId: tool?.capabilityId ?? 'executive',
+        capabilityId: isOffertenRecord(call) ? 'offerten' : tool?.capabilityId ?? 'executive',
         preview: call.preview,
         decision,
         at,
@@ -134,6 +140,23 @@ export async function approveToolCallAs(
     ...(outcome.error ? { error: outcome.error } : {}),
   });
 
+  if (outcome.ok && call.toolId === 'offerten.send') {
+    try {
+      // Feedback is evidence from the persisted quote, never the proposed args
+      // or a rejection. A concurrent edit must not teach an unsent revision.
+      const state = await getOffertenState(scope);
+      const quote = state.quotes.find((entry) => entry.id === call.args.quoteId);
+      if (quote && quote.revision === call.args.revision && quote.sentRevision === quote.revision) {
+        await updateOffertenMemory(
+          { scope, now, actor: decidedBy, resolveSecrets, callId: toolCallId },
+          quote.id,
+        );
+      }
+    } catch {
+      console.error('Could not update local Offerten feedback after the recorded send.');
+    }
+  }
+
   // After the run's result is on the record: the approval was real whether or
   // not the run then succeeded, and that is what the belief is about.
   await learnDecision(scope, call, 'approved', decidedAt, now);
@@ -161,6 +184,17 @@ export async function rejectToolCallAs(
     // founder can see, confirm or retire.
     result: 'Rejected. Nothing ran.',
   });
+  if (call?.toolId === 'offerten.send') {
+    try {
+      await recordRejectedOfferte(
+        { scope, now, actor: decidedBy, resolveSecrets, callId: toolCallId },
+        String(call.args.quoteId ?? ''),
+        Number(call.args.revision),
+      );
+    } catch {
+      console.error('Could not record the local Offerten rejection observation.');
+    }
+  }
   if (call) await learnDecision(scope, call, 'rejected', decidedAt, now);
   return call !== null;
 }

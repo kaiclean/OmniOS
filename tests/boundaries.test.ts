@@ -97,6 +97,31 @@ describe('invariant 2 — a decision has exactly two authors', () => {
     expect(offenders).toEqual([]);
   });
 
+  describe('Offerten — private reasoning never becomes model context', () => {
+    it('has no provider or embedding imports in the private core', async () => {
+      const offenders: string[] = [];
+      for (const file of await sourceFiles(join(ROOT, 'lib', 'offerten'))) {
+        const source = await readFile(file, 'utf8');
+        if (importedModules(source).some((specifier) => /(?:^|\/)(?:providers|embeddings)$/.test(specifier))) {
+          offenders.push(relative(ROOT, file));
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+
+    it('only lets the executor bridge import private Offerten services under lib/ai', async () => {
+      const offenders: string[] = [];
+      for (const file of await sourceFiles(join(ROOT, 'lib', 'ai'))) {
+        if (relative(ROOT, file) === join('lib', 'ai', 'tools', 'executors.ts')) continue;
+        const source = await readFile(file, 'utf8');
+        if (importedModules(source).some((specifier) => specifier.includes('offerten/service'))) {
+          offenders.push(relative(ROOT, file));
+        }
+      }
+      expect(offenders).toEqual([]);
+    });
+  });
+
   it('is only ever carried into runTool alongside the grant that justifies it', async () => {
     // The grant path is the one place `propose.ts` may hand `runTool` an
     // approval. If that construction ever stops being guarded by a found grant,

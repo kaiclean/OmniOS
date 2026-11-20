@@ -285,6 +285,19 @@ export const CAPABILITIES: readonly Capability[] = [
     specialistIds: ['chief-of-staff', 'strategist', 'analyst'],
   },
   {
+    id: 'offerten',
+    name: 'Offerten',
+    tagline: 'A quote is a decision, not a guess',
+    description:
+      'Company-only quote drafts with source evidence, an independent hand calculation, private margin review and revision-bound approval. Fixture-first; no live ERP or delivery is connected.',
+    group: 'run',
+    icon: 'file',
+    appliesTo: ['company'],
+    order: 18,
+    panels: [panel('offerten-review', 'Offerten review', 12)],
+    specialistIds: ['offerten'],
+  },
+  {
     id: 'health',
     name: 'Health & performance',
     tagline: 'The engine everything else runs on',

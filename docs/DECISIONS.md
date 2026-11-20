@@ -159,6 +159,38 @@ Every generator is seeded from a stable id. The same company always produces the
 same headquarters across reloads and machines, which makes generation testable
 with plain equality and stops a refresh silently reshuffling the founder's world.
 
+### D8 — Offerten starts as a company-local fixture, not an ERP integration
+The first quote workflow tests the difficult seam — evidence, owner edits,
+independent hand calculation, customer/internal separation and revision-bound
+approval — without real customer data or an outbound transport. Reusing the
+existing capability, specialist, store and tool-gate seams avoids a second
+assistant, permission system or bespoke connector.
+
+Customer documents are strict allowlist projections with fixed public price
+reasons. Private unit costs, margin, owner explanations and quote memory stay
+local and out of general assistant/provider/MCP retrieval. No generated fixture
+count is a measured KPI. Missing prices, baselines, VAT or observations remain
+absent instead of being filled with plausible numbers.
+
+Edits carry an expected revision; approval names the exact send revision and
+records a local generated receipt only. New edits require a fresh approval.
+Full exports are explicit private local readbacks; deletion removes the working
+data and derived private copies, not operator-controlled backups.
+
+*Alternatives rejected:* direct UI-to-service writes (bypass `confirmWrites`);
+generic memory/search over private pricing (silent provider leakage);
+redacting a customer PDF after composing the internal sheet (fail-open field
+growth); treating company scope as tenant auth (the app is single-founder).
+**Founder tenancy decision — 2026-11-20: company-scope-only.** Pilots stay as
+company scopes / company records inside the founder's workspace for now, with
+no separate authenticated workspace per pilot yet. This does not authorize
+pilot login: any future pilot login needs a new decision and a separate
+workspace/data directory and access key, not membership in this workspace.
+Retention, VAT/rounding policy, ERP details and the other rollout questions
+remain pending (**—**).
+See [`offerten/TENANCY.md`](./offerten/TENANCY.md) and
+[`offerten/PRIVACY.md`](./offerten/PRIVACY.md) for the discovery blockers.
+
 ---
 
 ## 4. Known limitations

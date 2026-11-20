@@ -32,6 +32,7 @@ import { specialistName, specialistsForCapability } from '@/lib/ai/specialists';
 import { getCapability } from '@/lib/capabilities/registry';
 import { Icon } from '@/components/ui/Icon';
 import { AssetPreview } from '@/components/creative/AssetPreview';
+import { OffertenPanel } from '@/components/offerten/OffertenPanel';
 import {
   Badge,
   Chips,
@@ -143,6 +144,16 @@ function CapabilityPanel({ spec, ctx }: { spec: PanelSpec; ctx: PanelContext }) 
       return <ProductsPanel title={title} span={span} ctx={ctx} />;
     case 'memory':
       return <MemoryPanel title={title} span={span} spec={spec} ctx={ctx} />;
+    case 'offerten-review':
+      return ctx.spaceKind === 'company' && ctx.company ? (
+        <OffertenPanel companyId={ctx.company.id} title={title} />
+      ) : (
+        <Panel title={title} span={span}>
+          <Empty title="Company-only review">
+            Open Offerten inside a company. Quote data and internal calculations are never aggregated here.
+          </Empty>
+        </Panel>
+      );
   }
 }
 

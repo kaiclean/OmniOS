@@ -151,6 +151,25 @@ export const SPECIALISTS: readonly SpecialistAgent[] = [
     ],
   },
   {
+    id: 'offerten',
+    name: 'Offerten Specialist',
+    domain: 'operations',
+    role: 'Evidence-led quote preparation and review',
+    charter:
+      'Drafts from company-local evidence, keeps customer reasons separate from internal costs and margins, and never treats a draft or send request as approval.',
+    capabilityIds: ['offerten'],
+    matches: [
+      'offerte', 'offerten', 'angebot', 'quote', 'quoting', 'quotation',
+      'hand calculation', 'handkalkulation', 'kalkulation', 'preisbegründung',
+    ],
+    allowedScopeKinds: ['company'],
+    wouldDo: [
+      'Compare a generated quote against an independently entered hand calculation',
+      'Show missing evidence and private margin inputs without inventing them',
+      'Prepare a revision-bound send request for recorded human approval',
+    ],
+  },
+  {
     id: 'engineer',
     name: 'Engineer',
     domain: 'development',
