@@ -141,8 +141,11 @@ costs, margins, owner commentary and Offerten memory out of generic recall,
 assistant/provider context, MCP reads and shared promotion. UI mutations must
 use `proposeCore`, including edits (`expectedRevision`) and local exports;
 fixture sends still require the normal recorded, revision-bound approval.
-Company scope is not authentication: the founder's tenancy decision is pending,
-and any pilot login requires its own workspace/data directory.
+The founder decided on 2026-11-20 to keep pilots as company scopes / company
+records inside the founder's workspace for now, without separate authenticated
+workspaces per pilot yet. Company scope is not authentication; pilot login is
+not authorized by this decision and would require a new decision and its own
+workspace/data directory.
 
 ## How the assistant works
 

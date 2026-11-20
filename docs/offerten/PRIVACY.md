@@ -18,8 +18,10 @@ this delivery. Owner of all unresolved rollout decisions: **founder**.
 
 ## Local processing and secrets
 
-- Default: one company scope on the trusted founder machine. Scope separation
-  is not user authorization; see [TENANCY.md](./TENANCY.md).
+- Founder decision (2026-11-20): pilot company scopes / company records stay
+  inside the founder's workspace; no separate authenticated workspace per pilot
+  yet. Scope separation is not user authorization and does not permit pilot
+  login; see [TENANCY.md](./TENANCY.md).
 - Connector configuration may store vault **placeholders only**, never password
   text. The executor-facing ingestion path can validate configured vault
   references through its secret resolver for the duration of the call; unresolved
@@ -73,6 +75,6 @@ this delivery. Owner of all unresolved rollout decisions: **founder**.
 | DPIA necessity and, if required, completed assessment | Founder with qualified advice | — |
 | Data-subject notice/access/correction/deletion process | Founder | — |
 | Retention, VAT, language, currency and rounding policy | Founder | — |
-| Pilot tenancy / authenticated workspace choice | Founder | Pending; separate workspace mandatory if pilot logs in |
+| Pilot tenancy / authenticated workspace choice | Founder | Decided 2026-11-20: company scopes / company records inside the founder's workspace; no separate authenticated workspace per pilot yet, no pilot login |
 
 Do not treat unchecked items as accepted risk or a live-pilot authorization.

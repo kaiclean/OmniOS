@@ -181,9 +181,13 @@ data and derived private copies, not operator-controlled backups.
 generic memory/search over private pricing (silent provider leakage);
 redacting a customer PDF after composing the internal sheet (fail-open field
 growth); treating company scope as tenant auth (the app is single-founder).
-The founder's tenancy decision remains pending. Company-scope-only is the
-default; a pilot with login needs a separate workspace/data directory and
-access key, not membership in this workspace.
+**Founder tenancy decision — 2026-11-20: company-scope-only.** Pilots stay as
+company scopes / company records inside the founder's workspace for now, with
+no separate authenticated workspace per pilot yet. This does not authorize
+pilot login: any future pilot login needs a new decision and a separate
+workspace/data directory and access key, not membership in this workspace.
+Retention, VAT/rounding policy, ERP details and the other rollout questions
+remain pending (**—**).
 See [`offerten/TENANCY.md`](./offerten/TENANCY.md) and
 [`offerten/PRIVACY.md`](./offerten/PRIVACY.md) for the discovery blockers.
 

@@ -112,13 +112,16 @@ Missing inputs and unmeasured outcomes remain `—`; fixture rows are not observ
 performance. Customer reasons use safe fixed labels, not private cost/rule text.
 Offerten memory is company-local and excluded from generic assistant context,
 search, MCP reads, promotion and provider transfer. Full exports are private
-local downloads, not customer attachments. This is not a multi-user pilot: a
-company scope is **not authentication**. If a pilot logs in, it requires a
-separate workspace/data directory and access key, not another company tab.
+local downloads, not customer attachments. On **2026-11-20**, the founder chose
+to keep pilots as company scopes / company records inside the founder's
+workspace for now, with no separate authenticated workspace per pilot yet.
+A company scope is **not authentication**; this does not authorize pilot login.
+Any future pilot login requires a new decision and a separate workspace/data
+directory and access key, not another company tab.
 
 No real customer data, live database credentials, sending, or model fine-tuning
-is part of this fixture delivery. The founder must decide ERP discovery,
-tenancy, hosting, processor agreements, retention and any DPIA before a real
+is part of this fixture delivery. ERP details, VAT/rounding policy, hosting,
+processor agreements, retention and any DPIA remain pending (`—`) before a real
 pilot. Design, schemas and boundaries: [`docs/offerten/DESIGN.md`](./docs/offerten/DESIGN.md);
 walkthrough: [`FLOW.md`](./docs/offerten/FLOW.md); engineering privacy checklist:
 [`PRIVACY.md`](./docs/offerten/PRIVACY.md); tenancy decision:
