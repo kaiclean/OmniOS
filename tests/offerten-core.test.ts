@@ -367,6 +367,25 @@ describe('revision approvals, feedback, export and deletion', () => {
     expect(JSON.stringify(state.sends[0]?.document)).not.toContain('PRIVATE');
   });
 
+  it('classifies quantity-only revisions as edited approvals without inventing a price correction or duplicate feedback', async () => {
+    const scope = freshScope();
+    await ingestFixture(context(scope));
+    const proposed = await draft(scope);
+    const edited = await editOfferte(scope, proposed.id, {
+      expectedRevision: 1, positions: [{ id: proposed.positions[0]!.id, quantity: 3 }],
+    }, NOW);
+    expect(edited.positions[0]?.unitPrice).toBe(proposed.positions[0]?.unitPrice);
+    const ctx = await sent(scope, edited);
+    expect((await updateOffertenMemory(ctx, edited.id)).ok).toBe(true);
+    expect((await updateOffertenMemory(ctx, edited.id)).ok).toBe(true);
+    const state = await getOffertenState(scope);
+    expect(state.metrics).toMatchObject({ observationCount: 1, approvedEdited: 1, approvedAsDrafted: 0 });
+    expect(state.observations[0]?.positions[0]?.deviation).toBe(0);
+    expect(state.observations[0]?.quoteDeviation).toBe(0);
+    expect(state.rules).toHaveLength(1);
+    expect(state.catalogue.filter((quote) => quote.id === edited.id)).toHaveLength(1);
+  });
+
   it('keeps hand comparisons separate from corrections and measures intake to approval, never client-supplied duration', async () => {
     const scope = freshScope();
     await ingestFixture(context(scope));

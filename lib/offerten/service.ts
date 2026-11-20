@@ -485,7 +485,7 @@ function observation(quote: OffertenQuote, call: ToolCall, rejected: boolean, at
   const handTotal = handValues.some((value) => value === null) ? null : handValues.reduce<number>((sum, value) => sum + (value ?? 0), 0);
   return {
     id: idFor('offerten-observation', call.id), quoteId: quote.id, revision: quote.revision, at,
-    decision: rejected ? 'rejected' : positions.some((entry) => entry.proposed !== entry.final) ? 'approved-edited' : 'approved-as-drafted',
+    decision: rejected ? 'rejected' : quote.revision > 1 ? 'approved-edited' : 'approved-as-drafted',
     positions,
     quoteDeviation: baseline === null || final === null ? null : final - baseline,
     quoteRelativeDeviation: baseline === null || baseline === 0 || final === null ? null : (final - baseline) / baseline,
